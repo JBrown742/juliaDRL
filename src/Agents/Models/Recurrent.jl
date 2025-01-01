@@ -1,4 +1,4 @@
-struct Recurrent <: LearningModel
+struct Recurrent <: AbstractModel
     model::Chain
 end
 function (m::Recurrent)(state::Vector{Float32})
@@ -20,7 +20,7 @@ function (m::Recurrent)(state::Matrix{Float32})
     output = m.model(state)
     return output
 end
-Flux.@functor Recurrent
+Functors.@functor Recurrent
 
 function save_model(Recurrent_model::Recurrent, save_dir::String; model_info::String="")
     if !isdir(save_dir)

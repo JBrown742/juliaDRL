@@ -1,10 +1,10 @@
-struct DNN <: LearningModel
+struct DNN <: AbstractModel
     model::Chain
 end
-function (m::DNN)(state::Vector{Float32})
-    return dropdims.(m.model(reshape(state, (length(state), 1))), dims=2)
+function (m::DNN)(state::VectorObs)
+    return dropdims(m.model(reshape(state, (length(state), 1))), dims=2)
 end
-function (m::DNN)(state::Vector{Vector{Float32}})
+function (m::DNN)(state::Vector{O}) where {O <: VectorObs}
     reshaped_state = reduce(hcat, state)
     return m.model(reshaped_state)
 end
@@ -17,7 +17,7 @@ end
 # function (m::DNN)(state::CuArray{Float32, 1, CUDA.DeviceMemory})
 #     return m.model(state)
 # end
-Flux.@functor DNN
+Functors.@functor DNN
 
 function save_model(DNN_model::DNN, save_dir::String; model_info::String="")
     if !isdir(save_dir)

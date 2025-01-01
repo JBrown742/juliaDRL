@@ -1,4 +1,4 @@
-struct CNN <: LearningModel
+struct CNN <: AbstractModel
     model::Chain
 end
 
@@ -20,7 +20,7 @@ end
 function (m::CNN)(state::Array{Float32, 4})
     return dropdims(state)
 end
-Flux.@functor CNN
+Functors.@functor CNN
 
 function save_model(CNN_model::CNN, save_dir::String; model_info::String="")
     num_saved_models = length(readdir(save_dir))

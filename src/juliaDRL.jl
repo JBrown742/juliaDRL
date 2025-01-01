@@ -8,9 +8,10 @@ export
     # Define abstract types to supertype our observation 
     # and model types
     AbstractAgent, 
-    LearningModel,
+    AbstractModel,
+    AbstractPolicy,
     AbstractObservation,
-
+    
     # Define the possible observation types. 
     # Currently we assume models can only work 
     # with vector inputs (ANN), matrix or array inputs (CNN)
@@ -21,9 +22,19 @@ export
     GraphObs,
 
     # Model exports
-    DNN, 
-    
-    #utils 
+    LearningModel,
+
+    CNN,
+    DNN,
+    Recurrent, 
+
+    #Policies
+    EpsilonGreedy,
+    get_action,
+
+    # Helper function
+    save_model,
+    load_model,
     Split
 
 
@@ -39,6 +50,7 @@ export
     step!,
     render!,
     reset!, 
+    close!,
 
     normalise    
        
@@ -46,14 +58,40 @@ include("Algorithms.jl")
 using .Algorithms
 
 export
-    LearningAlgorithm,
+    AbstractExperience, 
+    AbstractBuffer,
 
-    # DQN
+    AbstractAlgorithm,
+    Experience,
+    Buffer,
+
+    # Import RL related Algorithm functionality and types
+    ## DQN
+    DQNexperience,
+    ExperienceBuffer,
+    buffer_add!,
+    buffer_pop!,
+    buffer_shuffle!,
+    buffer_update!,
+    sample,
+    buffer_size_check,
+    states,
+    rewards, 
+    next_states,
+    terminals,
+
+    ### Alg types
     DQN,
+
+    ### Alg functions
     train!,
     learning_episode!,
     validation_episode!,
     update_target!,
     soft_update_target!
+
+
+
+    
 end # module telaQML
 

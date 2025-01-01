@@ -1,7 +1,6 @@
 module Environments
 
 using Plots
-using ComputedFieldTypes
 using Combinatorics
 using Distributed
 using PyCall 
@@ -11,11 +10,16 @@ using Random
 using Flux
 using NNlib
 
+const gym = PyNULL()
+function __init__()
+    copy!(gym,  pyimport("gymnasium"))
+end
 
-
-# using ..juliaDRL: 
+using ..juliaDRL: AbstractObservation, VectorObs
 
 export
+    AbstractEnv, 
+
     Cartpole,
     Pendulum,
     CarRacing,
@@ -23,10 +27,14 @@ export
     step!,
     render!,
     reset!, 
+    close!,
     
     normalise
 
 
 include("./Environments/MasterEnv.jl")
+include("./Environments/Cartpole.jl")
+include("./Environments/Pendulum.jl")
+include("./Environments/CarRacing.jl")
 
 end # module Models

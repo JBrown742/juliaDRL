@@ -1,33 +1,23 @@
 mutable struct Cartpole{S, A} <: AbstractEnv
     episode_length::Int64
     pyenv::PyObject
-    state::Vector{Float32}
+    state::VectorObs
     terminal::Bool
     actions::Vector{Int}
     possible_actions::Vector{Int}
-    function Cartpole(len::Int64, pyenv::PyObject)
-        obs, info = pyenv.reset()
-        return new{Vector{Float32}, Int}(len, pyenv, obs, false, [0,1], [1,2])
+    function Cartpole(len::Int64)
+        pe = gym.make("CartPole-v1", render_mode="human")
+        obs, info = pe.reset()
+        return new{VectorObs, Int}(len, pe, obs, false, [0,1], [1,2])
     end
-end
-
-state_type(::Type{C}) where C <: Cartpole = Vector{Float64}
-action_type(::Type{C}) where C <: Cartpole = Int
-
-function action_mask(env::Cartpole)
-    return ones(Float32, 2)
-end
-
-function get_action_probs(env::Cartpole, actions::Vector{Int}, model_outputs::Vector{Float32})
-    return model_outputs
 end
 
 function step!(env::Cartpole, action::Int)
     act = env.actions[action]
     observation, reward, terminated, truncated, info = env.pyenv.step(act)
-    env.state = observation
+    env.state = normalize(observation)
     env.terminal = terminated
-    return observation, reward, terminated || truncated
+    return normalize(observation), reward, terminated || truncated
 end
 
 
@@ -38,10 +28,14 @@ function render!(env::Cartpole)
 end
 
 function reset!(env::Cartpole) 
-    (observation, info) = env.pyenv.reset()
-    env.state = observation
+    observation, info = env.pyenv.reset()
+    env.state = normalize(observation)
     env.terminal = false
-    return observation
+    return normalize(observation)
+end
+
+function close!(env::Cartpole)
+    env.pyenv.close()
 end
 
 # =======================... Utility functions...================================== #
@@ -52,3 +46,6 @@ end
 function normalize(x::Matrix{Float32}) 
     return x ./ Float32.([4.8, 3, 0.418, 3] .* ones(size(x)))
 end
+        # model_outputs = alg.agent.model(states) 
+        # value_of_actual_actions = dropdims(sum( mask .* model_outputs, dims=1), dims=1)
+        # Flux.Losses.mse(targs, value_of_actual_actions)
