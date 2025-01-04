@@ -118,6 +118,30 @@ function validation_episode!(env::E, alg::DQN{S,A}; render::Bool=false) where {E
     return sum(episode_reward)
 end
 
+function validation_episode!(env::E, agent::T; render::Bool=false) where {E<:AbstractEnv, T <: AbstractAgent, S,A}
+    # initialise vectors to store the history of states actions and rewards for the entire episode
+    state = reset!(env)
+    term = false
+    episode_reward = Vector{Float64}()
+    step=0
+    while env.terminal == false # bool flag to denote whether routing has finished
+        # calculate the mode outputs based on the current graph
+
+        action = get_action(agent, state; det=true)
+        if render==true
+            sleep(0.01)
+            render!(env)
+        end
+        state, reward, term = step!(env, action)
+        push!(episode_reward, reward)
+        step+=1
+        if step==env.episode_length
+            env.terminal = true
+        end
+    end
+    return sum(episode_reward)
+end
+
 function update_target!(alg::DQN{S,A}) where {S, A}
     for (idx,p) in enumerate(Flux.params(alg.agent.model))
         Flux.params(alg.target_model)[idx] .= copy(p)

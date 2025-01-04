@@ -3,9 +3,11 @@ function learn(env::Cartpole, alg::DQN;
         checkpoint_freq=1, vals_per_checkpoint=10, 
         save_dir=pwd(), test_name="test"
     )
-    info_dict = Dict{String, Any}("Agent" => repr(alg.agent), "Algorithm" => repr(alg), 
+    info_dict = Dict{String, Any}("Agent" => Dict{String, Any}("model"=> repr(alg.agent.model), "Policy"=> repr(alg.agent.policy)), 
+        "Algorithm" => Dict{String, Any}("Buffer size" => alg.n, "batch_size" => alg.batch_size, 
+        "γ" => alg.γ, "τ"=> alg.τ, "Optimizer"=> repr(alg.optimizer)), 
         "Environment" => repr(env), "training_iters" => training_iters, "warmup_iters" => warmup_iters,
-        "checkpoint_freq" => checkpoint_freq, "vals_per_checkpoint" => checkpoint_freq
+        "checkpoint_freq" => checkpoint_freq, "vals_per_checkpoint" => vals_per_checkpoint
         )
     save_dir *= "/"*test_name
     if isdir(save_dir)
@@ -54,4 +56,19 @@ function learn(env::Cartpole, alg::DQN;
     open(save_dir*"/metadata.json","w") do f 
         write(f, json_string) 
     end
+end
+
+function visualise_learning(env::Cartpole, test_dir::String)
+    checkpoint_dir = test_dir*"/"*"checkpointed_models"
+    model_list = readdir(checkpoint_dir)
+    ordered_indices = sortperm(first.(split.(last.(split.(model_list, "_")), ".")))
+    for mod in model_list[ordered_indices]
+        iter = split(split(mod, "_")[end], ".")[1]
+        model = load_model(checkpoint_dir * "/" *mod)
+        agent = AbstractAgent(model, EpsilonGreedy(0.))
+        println("Model checkpointed at $(iter)")
+        R = validation_episode!(env, agent)
+        println("Achieved reward = $(R)")
+    end
+    close!(env)
 end

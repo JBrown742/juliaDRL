@@ -91,7 +91,8 @@ export
     soft_update_target!,
 
     ## APIl
-    learn
+    learn,
+    visualise_learning
 
 
 
