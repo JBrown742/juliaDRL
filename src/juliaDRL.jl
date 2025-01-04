@@ -88,7 +88,10 @@ export
     learning_episode!,
     validation_episode!,
     update_target!,
-    soft_update_target!
+    soft_update_target!,
+
+    ## APIl
+    learn
 
 
 

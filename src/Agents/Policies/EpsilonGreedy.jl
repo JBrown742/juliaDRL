@@ -1,4 +1,4 @@
-struct EpsilonGreedy <: AbstractPolicy
+mutable struct EpsilonGreedy <: AbstractPolicy
     epsilon::Float64
 end
 

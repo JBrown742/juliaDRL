@@ -5,9 +5,13 @@ mutable struct Cartpole{S, A} <: AbstractEnv
     terminal::Bool
     actions::Vector{Int}
     possible_actions::Vector{Int}
-    function Cartpole(len::Int64)
-        pe = gym.make("CartPole-v1", render_mode="human")
-        obs, info = pe.reset()
+    function Cartpole(len::Int64; render=false)
+        if render
+            pe = gym.make("CartPole-v1", render_mode="human");
+        else            
+            pe = gym.make("CartPole-v1");
+        end
+        obs, info = pe.reset();
         return new{VectorObs, Int}(len, pe, obs, false, [0,1], [1,2])
     end
 end

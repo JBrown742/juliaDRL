@@ -9,9 +9,11 @@ using LinearAlgebra
 using Flux
 using Shuffle
 using CUDA
+using Plots # used for API function
+using JSON # used for API function
 
 using ..juliaDRL: AbstractAgent, AbstractModel, AbstractEnv,
-step!, render!, reset!, close!, get_action, AbstractObservation, VectorObs
+step!, render!, reset!, close!, get_action, AbstractObservation, VectorObs, Cartpole, save_model
 
 export
     AbstractExperience, 
@@ -36,7 +38,7 @@ export
     next_states,
     terminals,
 
-    ### Alg types
+    ## Alg types
     DQN,
 
     ### Alg functions
@@ -44,7 +46,10 @@ export
     learning_episode!,
     validation_episode!,
     update_target!,
-    soft_update_target!
+    soft_update_target!,
+
+    ### API
+    learn
 
 
 
@@ -52,6 +57,7 @@ export
 include("./Algorithms/MasterAlgorithm.jl")
 include("./Algorithms/RL/Buffer.jl")
 include("./Algorithms/RL/DQN/DQN.jl")
+include("./Algorithms/RL/DQN/API.jl")
 
 end # module Models
 
