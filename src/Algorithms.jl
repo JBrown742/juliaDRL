@@ -13,7 +13,8 @@ using Plots # used for API function
 using JSON # used for API function
 
 using ..juliaDRL: AbstractAgent, AbstractModel, AbstractEnv,
-step!, render!, reset!, close!, get_action, AbstractObservation, VectorObs, Cartpole, save_model, load_model, EpsilonGreedy
+step!, render!, reset!, close!, Cartpole, save_model, load_model,
+AbstractObservation, AbstractAction
 
 export
     AbstractExperience, 
@@ -50,8 +51,12 @@ export
 
     ### API
     learn,
-    visualise_learning
+    visualise_learning,
 
+    ## PPO 
+    PPO,
+
+    get_action
 
 
 

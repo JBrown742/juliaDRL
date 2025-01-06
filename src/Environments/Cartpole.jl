@@ -1,18 +1,18 @@
-mutable struct Cartpole{S, A} <: AbstractEnv
+mutable struct Cartpole <: AbstractEnv
     episode_length::Int64
     pyenv::PyObject
-    state::VectorObs
+    state::Vector{Float64}
     terminal::Bool
     actions::Vector{Int}
-    possible_actions::Vector{Int}
+    action_mask::Vector{Float32}
     function Cartpole(len::Int64; render=false)
         if render
             pe = gym.make("CartPole-v1", render_mode="human");
         else            
             pe = gym.make("CartPole-v1");
         end
-        obs, info = pe.reset();
-        return new{VectorObs, Int}(len, pe, obs, false, [0,1], [1,2])
+        obs, info = pe.reset()
+        return new(len, pe, obs, false, [0, 1], ones(Float32, 2))
     end
 end
 
@@ -50,6 +50,3 @@ end
 function normalize(x::Matrix{Float32}) 
     return x ./ Float32.([4.8, 3, 0.418, 3] .* ones(size(x)))
 end
-        # model_outputs = alg.agent.model(states) 
-        # value_of_actual_actions = dropdims(sum( mask .* model_outputs, dims=1), dims=1)
-        # Flux.Losses.mse(targs, value_of_actual_actions)

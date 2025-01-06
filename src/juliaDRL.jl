@@ -1,5 +1,6 @@
 module juliaDRL
 
+
 #This is the main format in order to import a module to the overall package
 include("Agents.jl")
 using .Agents
@@ -9,8 +10,8 @@ export
     # and model types
     AbstractAgent, 
     AbstractModel,
-    AbstractPolicy,
     AbstractObservation,
+    AbstractAction,
     
     # Define the possible observation types. 
     # Currently we assume models can only work 
@@ -21,6 +22,11 @@ export
     ArrayObs,
     GraphObs,
 
+    DiscreteAct,
+    ContinuousAct,
+    MultiDiscreteAct,
+    MultiContinuousAct,
+    
     # Model exports
     LearningModel,
 
@@ -92,7 +98,11 @@ export
 
     ## APIl
     learn,
-    visualise_learning
+    visualise_learning,
+
+    PPO,
+
+    get_action
 
 
 

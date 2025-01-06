@@ -4,7 +4,7 @@ end
 function (m::DNN)(state::VectorObs)
     return dropdims(m.model(reshape(state, (length(state), 1))), dims=2)
 end
-function (m::DNN)(state::Vector{O}) where {O <: VectorObs}
+function (m::DNN)(state::Vector{O}) where {O <: AbstractObservation}
     reshaped_state = reduce(hcat, state)
     return m.model(reshaped_state)
 end

@@ -14,8 +14,8 @@ export
     # and model types
     AbstractAgent, 
     AbstractModel,
-    AbstractPolicy,
     AbstractObservation,
+    AbstractAction,
     
     # Define the possible observation types. 
     # Currently we assume models can only work 
@@ -25,6 +25,11 @@ export
     MatrixObs,
     ArrayObs,
     GraphObs,
+
+    DiscreteAct,
+    ContinuousAct,
+    MultiDiscreteAct,
+    MultiContinuousAct,
 
     # Model exports
     LearningModel,
@@ -44,7 +49,6 @@ export
     Split
 
 include("./Agents/MasterAgent.jl")
-include("./Agents/Policies/EpsilonGreedy.jl")
 include("./Agents/Models/DNN.jl")
 include("./Agents/Models/CNN.jl")
 include("./Agents/Models/Recurrent.jl")

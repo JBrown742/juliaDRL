@@ -3,7 +3,7 @@ function learn(env::Cartpole, alg::DQN;
         checkpoint_freq=1, vals_per_checkpoint=10, 
         save_dir=pwd(), test_name="test"
     )
-    info_dict = Dict{String, Any}("Agent" => Dict{String, Any}("model"=> repr(alg.agent.model), "Policy"=> repr(alg.agent.policy)), 
+    info_dict = Dict{String, Any}("Agent" => Dict{String, Any}("model"=> repr(alg.agent.model)), 
         "Algorithm" => Dict{String, Any}("Buffer size" => alg.n, "batch_size" => alg.batch_size, 
         "γ" => alg.γ, "τ"=> alg.τ, "Optimizer"=> repr(alg.optimizer)), 
         "Environment" => repr(env), "training_iters" => training_iters, "warmup_iters" => warmup_iters,
@@ -26,12 +26,11 @@ function learn(env::Cartpole, alg::DQN;
     for i in 1:warmup_iters
         learning_episode!(env, alg)
     end
+    println("learning begin")
     # then repeat for the number of training iterations
     for i in 1:training_iters 
         learning_episode!(env, alg)
-        if alg.buffer.length > 1000
-            train!(alg)
-        end
+        train!(alg)
         if i % checkpoint_freq == 0
             reward_av = mean([validation_episode!(env, alg) for _ in 1:vals_per_checkpoint])
             if reward_av > best_reward
@@ -65,7 +64,7 @@ function visualise_learning(env::Cartpole, test_dir::String)
     for mod in model_list[ordered_indices]
         iter = split(split(mod, "_")[end], ".")[1]
         model = load_model(checkpoint_dir * "/" *mod)
-        agent = AbstractAgent(model, EpsilonGreedy(0.))
+        agent = AbstractAgent(model)
         println("Model checkpointed at $(iter)")
         R = validation_episode!(env, agent)
         println("Achieved reward = $(R)")

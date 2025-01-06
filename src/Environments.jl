@@ -15,8 +15,7 @@ function __init__()
     copy!(gym,  pyimport("gymnasium"))
 end
 
-using ..juliaDRL: AbstractObservation, VectorObs
-
+using ..juliaDRL: AbstractObservation, AbstractAction
 export
     AbstractEnv, 
 

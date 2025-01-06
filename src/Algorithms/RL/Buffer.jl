@@ -1,7 +1,7 @@
 
 
 """
-    buffer_pop!(buffer::Buffer{S})
+    buffer_pop!(buffer::Buffer)
 
 Function for popping elements from buffer.
 """
@@ -27,7 +27,7 @@ consequential lol
 
 
 # ==================== pop! functionalities ==================== #
-function buffer_pop!(buffer::Buffer{S, A}, n::Int) where {S, A}
+function buffer_pop!(buffer::Buffer, n::Int) 
     if buffer.length >= n
         deleteat!(buffer.experiences, 1:n)
         if !isempty(buffer.bellman_errors)
@@ -42,13 +42,13 @@ end
 
 # ==================== add! functionalities ==================== #
 
-function buffer_size_check(buffer::Buffer{S, A},l::Int64) where {S, A}
+function buffer_size_check(buffer::Buffer,l::Int64) 
     check::Bool = buffer.length + l <= buffer.maximum_length 
     !check && ErrorException("Adding this many experiences would exceed maximum buffer length. Use buffer_pop! to free up space")
     return check
 end
 
-function buffer_add!(buffer::Buffer{S, A}, collected_exp::E; bellman_error::Union{Float64}=0.) where {S, A, E <: AbstractExperience}
+function buffer_add!(buffer::Buffer, collected_exp::E; bellman_error::Union{Float64}=0.) where {E <: AbstractExperience}
     check::Bool = buffer_size_check(buffer, 1)
     if !check 
         push!(buffer.experiences, collected_exp)
@@ -60,7 +60,7 @@ function buffer_add!(buffer::Buffer{S, A}, collected_exp::E; bellman_error::Unio
     end
 end
 
-function buffer_add!(buffer::Buffer{S, A}, collected_exp::Vector{E}; bellman_error::Vector{Float64}=Vector{Float64}()) where {S, A, E <: AbstractExperience}
+function buffer_add!(buffer::Buffer, collected_exp::Vector{E}; bellman_error::Vector{Float64}=Vector{Float64}()) where {E <: AbstractExperience}
     num_exps = length(collected_exp)
     check::Bool = buffer_size_check(buffer, num_exps)
     if check
@@ -74,10 +74,10 @@ function buffer_add!(buffer::Buffer{S, A}, collected_exp::Vector{E}; bellman_err
 end
 
 # ==================== update! functionalities ==================== #
-buffer_shuffle!(buffer::Buffer{S, A}) where {S, A} = shuffle!(buffer.experiences) 
+buffer_shuffle!(buffer::Buffer)  = shuffle!(buffer.experiences) 
 
 
-function buffer_update!(buffer::Buffer{S, A}, collected_experience::Vector{E}; bellman_errors::Vector{Float64}=Vector{Float64}(), shuffle::Bool=true)  where {S, A, E <: AbstractExperience}
+function buffer_update!(buffer::Buffer, collected_experience::Vector{E}; bellman_errors::Vector{Float64}=Vector{Float64}(), shuffle::Bool=true) where {E <: AbstractExperience}
     # Do some checks on the buffer lengths and act accordingly
     if buffer.length + length(collected_experience) <= buffer.maximum_length
         buffer_add!(buffer, collected_experience; bellman_error = bellman_errors)
@@ -92,14 +92,14 @@ function buffer_update!(buffer::Buffer{S, A}, collected_experience::Vector{E}; b
     end
 end
 
-buffer_update!(buffer::Buffer{S, A}, collected_exp::E; bellman_error::Float64=0., shuffle::Bool=true) where {S, A, E <: AbstractExperience} = buffer_update!(buffer,[collected_exp]; bellman_errors = [bellman_error], shuffle=shuffle)
+buffer_update!(buffer::Buffer, collected_exp::E; bellman_error::Float64=0., shuffle::Bool=true) where {E <: AbstractExperience} = buffer_update!(buffer,[collected_exp]; bellman_errors = [bellman_error], shuffle=shuffle)
 
 # ==================== sample functionalities ==================== #
 
 
 import StatsBase: sample
 
-function sample(buffer::Buffer{S, A}, sample_size::Int) where {S, A}# add functionality for changing the distribution?
+function sample(buffer::Buffer, sample_size::Int) # add functionality for changing the distribution?
     if !isempty(buffer.bellman_errors)
         sample_probs = buffer.bellman_errors .^ buffer.α ./ sum(buffer.bellman_errors .^ buffer.α)
         IS_weights = ( buffer.length .* sample_probs ) .^ (1*buffer.β)
@@ -115,7 +115,7 @@ function sample(buffer::Buffer{S, A}, sample_size::Int) where {S, A}# add functi
     return buffer.experiences[idxs], idxs, IS_weights
 end
 
-function states(buffer::Buffer{S, A}) where {S, A}
+function states(buffer::Buffer) 
     states = Vector{S}()
     for exp in buffer.experiences
         push!(states, exp.state)
@@ -123,7 +123,7 @@ function states(buffer::Buffer{S, A}) where {S, A}
     return states
 end
 
-function rewards(buffer::Buffer{S, A}) where {S, A}
+function rewards(buffer::Buffer) 
     rewards = Vector{S}()
     for exp in buffer.experiences
         push!(rewards, exp.reward)
@@ -131,7 +131,7 @@ function rewards(buffer::Buffer{S, A}) where {S, A}
     return rewards
 end
 
-function next_states(buffer::Buffer{S, A}) where {S, A}
+function next_states(buffer::Buffer) 
     next_states = Vector{S}()
     for exp in buffer.experiences
         push!(next_states, exp.next_state)
@@ -139,7 +139,7 @@ function next_states(buffer::Buffer{S, A}) where {S, A}
     return next_states
 end
 
-function terminals(buffer::Buffer{S, A}) where {S, A}
+function terminals(buffer::Buffer) 
     terminals = Vector{S}()
     for exp in buffer.experiences
         push!(terminals, exp.terminal)

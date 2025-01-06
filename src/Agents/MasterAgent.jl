@@ -1,26 +1,25 @@
 abstract type AbstractModel end
-abstract type AbstractPolicy end
 
 mutable struct AbstractAgent
     model::AbstractModel
-    policy::AbstractPolicy
 end
-
-
-
 
 const VectorObs = Union{Vector{Float64}, Vector{Float32}}
-
 const MatrixObs = Union{Matrix{Float64}, Matrix{Float32}}
-
-const ArrayObs = Union{Array{Float64}, Matrix{Float32}}
-
+const ArrayObs = Union{Array{Float64}, Array{Float32}}
 mutable struct GraphObs 
-    features::Matrix{Float64}
-    adjacency::Matrix{Float64}
+    features::Union{Matrix{Float64}, Matrix{Float32}}
+    adjacency::Union{Matrix{Float64}, Matrix{Float32}}
 end
-
 const AbstractObservation = Union{VectorObs, MatrixObs, ArrayObs, GraphObs}
+
+const DiscreteAct = Int
+const ContinuousAct = Union{Float32, Float64}
+const MultiDiscreteAct = Vector{Int}
+const MultiContinuousAct = Union{Vector{Float32}, Vector{Float64}}
+
+const AbstractAction = Union{DiscreteAct, ContinuousAct, MultiDiscreteAct, MultiContinuousAct}
+
 
 struct Split{T}
     paths::T
