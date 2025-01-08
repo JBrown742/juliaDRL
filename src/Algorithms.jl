@@ -14,7 +14,7 @@ using JSON # used for API function
 
 using ..juliaDRL: AbstractAgent, AbstractModel, AbstractEnv,
 step!, render!, reset!, close!, Cartpole, save_model, load_model,
-AbstractObservation, AbstractAction
+AbstractObservation, AbstractAction, DiscreteAct
 
 export
     AbstractExperience, 
@@ -55,7 +55,7 @@ export
 
     ## PPO 
     PPO,
-
+    full_training_procedure!,
     get_action
 
 
@@ -64,6 +64,7 @@ include("./Algorithms/MasterAlgorithm.jl")
 include("./Algorithms/RL/Buffer.jl")
 include("./Algorithms/RL/DQN/DQN.jl")
 include("./Algorithms/RL/DQN/API.jl")
+include("./Algorithms/RL/PPO/PPO.jl")
 
 end # module Models
 

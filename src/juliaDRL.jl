@@ -101,7 +101,7 @@ export
     visualise_learning,
 
     PPO,
-
+    full_training_procedure!,
     get_action
 
 

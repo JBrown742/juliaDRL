@@ -3,7 +3,7 @@
 # as long as the state is of one of the 3 defined types, then it only depends on the action type
 # and in that case an algorithm which supports two different action types may differ enough
 # to warrant two sparate structs
-mutable struct PPO <: LearningAlgorithm
+mutable struct PPO <: AbstractAlgorithm
     N::Int # Number of concurrent workers for gathering experience segments.
     T::Int # Trajectory learning segment length 
     K::Int # Epoch, number of updates to carry out with a given trajectory.
@@ -22,7 +22,7 @@ mutable struct PPO <: LearningAlgorithm
     optimizer::AbstractRule
     optimizer_s::NamedTuple
     function PPO(N::Int, T::Int, K::Int, agent::A, batch_size::Int, γ::Float64, λ::Float64, 
-        ϵ::Float32, c1::Float32, c2::Float32, sync_frequency::Int, optimizer::O) where {A <: AbstractAgent, O <: AbstractRule}
+        ϵ::Float64, c1::Float64, c2::Float64, sync_frequency::Int, optimizer::O) where {A <: AbstractAgent, O <: AbstractRule}
         m = agent.model
         # |> gpu -- removing GPU functionality for now
         als = [AbstractAgent(deepcopy(m)) for i in 1:N]
@@ -41,22 +41,12 @@ mutable struct PPO <: LearningAlgorithm
         su = Flux.setup(optimizer, agent.model)
         return new(N, T, K, agent, als, 64, 0.99, 0.95, 0.2, 0.5, 0.001, 2, advantage_coefficients, optimizer, su)
     end
-    function PPO(N::Int, T::Int, K::Int,  agent::A, 
-        optimizer::O) where {A <: AbstractAgent, O <: AbstractRule}
-        m = agent.model
-        # |> gpu -- removing GPU functionality for now
-        als = [deepcopy(agent) for i in 1:N]
-        exponents = collect(0:T*100)
-        advantage_coefficients = (0.95 * 0.99) .^ exponents
-        su = Flux.setup(optimizer, agent.model)
-        return new{S,A}(N, T, K, agent, als, 64, 0.99, 0.95, 0.2, 0.5, 0.001, 2, advantage_coefficients, optimizer, su)
-    end
+
 end
 
 ## The environment is still baked into this algo...
 function train!(alg::PPO, transitions::Vector{Experience}, probabilities::Vector{Vector{Float32}},
     advantages::Vector{Float32}, bellman_targets::Vector{Float32}, bellman_errors::Vector{Float32})
-    θ = Flux.params(alg.central_model) # get the model parameters. # Model needs to be in a consistent format whereby θ encapsulates all params
     # initialise vectors to store batched data
     available_batch_indices = collect(1:length(transitions))
     for update_step in 1:alg.K
@@ -85,10 +75,10 @@ function train!(alg::PPO, transitions::Vector{Experience}, probabilities::Vector
         batch_probabilities = probabilities[batch_indices]
         batch_advantages = (advantages[batch_indices] .- mean(advantages[batch_indices])) ./ std(advantages[batch_indices])
         batch_bellman_targets = reshape(bellman_targets[batch_indices], (1, length(batch_indices)))
-        actual_action_mask = indicatormat(actions, size.(θ)[end-2][1])
+        actual_action_mask = indicatormat(actions, first(alg.central_agent.model.model.layers[end].paths[1].bias |> size))
         probability_mask = hcat(infer_mask.(batch_probabilities)...) # vector of action masks
         ∇ = Flux.gradient(alg.central_agent.model) do m # track gradients
-            action_probs, state_values = m(reduce(hcat, states) |> gpu) .|> cpu
+            action_probs, state_values = m(reduce(hcat, states))
             masked_probs = masked_probabilities(probability_mask, action_probs)
             L_q_learning = Flux.Losses.mse(batch_bellman_targets, state_values)
             new_probs = dropdims(sum(masked_probs .* actual_action_mask, dims=1), dims=1)
@@ -104,7 +94,7 @@ function train!(alg::PPO, transitions::Vector{Experience}, probabilities::Vector
     end
 end
 
-function collect_trajectory_segment_alt!(env::E, agent::A, info::Dict{Symbol, Any}) where {E <: AbstractEnv, A <: LearningAgent}
+function collect_trajectory_segment!(env::E, agent::A, info::Dict{Symbol, Any}) where {E <: AbstractEnv, A <: AbstractAgent}
     T::Int = info[:T]
     γ::Float32 = info[:γ]
     advantage_coefficients::Vector{Float32} = info[:advantage_coefficients]
@@ -129,12 +119,12 @@ function collect_trajectory_segment_alt!(env::E, agent::A, info::Dict{Symbol, An
         end
         while env.terminal == false && local_segment_count < T # bool flag to denote whether episode has finished
             # Generalises below...
-            action, state_value, probs = get_action(PPO, state, agent; mask=env.action_mask) # get the action, the value and the probability
+            action, state_value, probs = get_action(PPO, agent, state; mask=env.action_mask) # get the action, the value and the probability
             push!(trajectory_probabilities, probs)
             new_state, reward, terminal = step!(env, action) # take a step of the hopper envs
             experience = Experience(state, action, new_state, reward, terminal)
             push!(current_ep_trajectory, experience)
-            _, next_state_value, _ = get_action(PPO, state, agent; mask=env.action_mask) # get the value of the next state to calculate bellman error & advantage
+            _, next_state_value, _ = get_action(PPO, agent, state; mask=env.action_mask) # get the value of the next state to calculate bellman error & advantage
             target = reward .+ (1 .- Int.(terminal)) .* γ .* next_state_value
             push!(local_targets, target[1])
             push!(local_errors, target[1] - state_value[1])
@@ -160,10 +150,10 @@ function collect_trajectory_segment_alt!(env::E, agent::A, info::Dict{Symbol, An
     return total_trajectory, trajectory_probabilities, all_advantages, all_targets, all_errors
 end
 
-function full_training_procedure_alt!(alg::PPO, envs::Vector{E}) where {E <: AbstractEnv}
+function full_training_procedure!(alg::PPO, envs::Vector{E}) where {E <: AbstractEnv}
     info = Dict{Symbol, Any}(:T => alg.T, :γ => alg.γ, :advantage_coefficients => alg.advantage_coefficients)
     agents = alg.actor_learners
-    results = pmap(collect_trajectory_segment_alt!, WorkerPool(workers()), envs, agents, fill(info, alg.N))
+    results = pmap(collect_trajectory_segment!, WorkerPool(workers()), envs, agents, fill(info, alg.N))
     all_transitions, all_probabilities, all_advantages, all_targets, all_errors = unzip(results)
     train!(alg, all_transitions, all_probabilities, all_advantages, all_targets, all_errors)
 end
@@ -180,8 +170,8 @@ function validation_episode!(env::E, alg::PPO; render::Bool=false) where {E<:Abs
         # calculate the mode outputs based on the current graph
         action, value, probs = get_action(PPO, alg.central_agent, state; det=true)
         if render==true
-            sleep(0.1)
-            render!(env, action)
+            sleep(0.005)
+            render!(env)
         end
         state, reward, term = step!(env, action)
         push!(episode_reward, reward)
@@ -219,18 +209,18 @@ function infer_mask(probabilities::Vector{Float32})
 end
 
 # ------------ get_actions functions ------- #
-function get_action(::Type{PPO}, agent::A, obs::O; det=false, mask=nothing) where {A, <: AbstractAgent, O <: AbstractObservation}
+function get_action(::Type{PPO}, agent::A, obs::O; det=false, mask=nothing) where {A <: AbstractAgent, O <: AbstractObservation}
     outputs, value = agent.model(obs)
     if isnothing(mask)
         mask = ones(length(outputs))
     end
     masked_outputs = outputs .+ mask
     ws = softmax(masked_outputs; dims = 1)
-    indices = collect(1:len(ws))
+    indices = collect(1:length(ws))
     if det == true
-        action = argmax(weights)
+        action = argmax(ws)
     else
-        action = sample(indices, Weights(we))
+        action = sample(indices, Weights(ws))
     end
     return action, value, ws
 end
