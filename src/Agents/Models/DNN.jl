@@ -2,7 +2,12 @@ struct DNN <: AbstractModel
     model::Chain
 end
 function (m::DNN)(state::VectorObs)
-    return dropdims.(m.model(reshape(state, (length(state), 1))), dims=2)
+    outputs = m.model(reshape(state, (length(state), 1)))
+    if length(outputs) > 1
+        return dropdims.(outputs, dims=2)
+    else
+        return dropdims(outputs, dims=2)
+    end
 end
 function (m::DNN)(state::Vector{O}) where {O <: AbstractObservation}
     reshaped_state = reduce(hcat, state)
@@ -33,6 +38,27 @@ function save_model(DNN_model::DNN, save_dir::String; model_info::String="")
 end
 
 function load_model(load_path::String)
+    @load load_path model
+    DNN_model = DNN(model)
+    return DNN_model
+end
+
+function save_model(DNN_model::Vector{M}, save_dir::String; model_info::String="") where {M <: AbstractModel}
+    if !isdir(save_dir)
+        mkdir(save_dir)
+    end
+    num_saved_models = length(readdir(save_dir))
+    for (i, mod) in enumerate(DNN_model)
+        if model_info==""
+            @save save_dir * "/model_$(num_saved_models+1)_$(i).bson" mod
+        else
+            @save save_dir * "/model_" * model_info * "_$(i).bson" mod
+        end
+    end
+end
+
+function load_model(load_path::String)
+
     @load load_path model
     DNN_model = DNN(model)
     return DNN_model

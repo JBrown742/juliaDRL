@@ -100,7 +100,7 @@ function validation_episode!(env::E, alg::DQN; render::Bool=false) where {E<:Abs
     return validation_episode!(env, alg.agent; render=render)
 end
 
-function validation_episode!(env::E, agent::T; render::Bool=false) where {E<:AbstractEnv, T <: AbstractAgent}
+function validation_episode!(::Type{DQN}, env::E, agent::T; render::Bool=false) where {E<:AbstractEnv, T <: AbstractAgent}
     # initialise vectors to store the history of states actions and rewards for the entire episode
     state = reset!(env)
     term = false

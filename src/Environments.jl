@@ -26,9 +26,8 @@ export
     step!,
     render!,
     reset!, 
-    close!,
-    
-    normalise
+    close!
+    # normalise
 
 
 include("./Environments/MasterEnv.jl")

@@ -57,7 +57,7 @@ function learn(env::Cartpole, alg::DQN;
     end
 end
 
-function visualise_learning(env::Cartpole, test_dir::String)
+function visualise_learning(::Type{DQN}, env::E, test_dir::String) where {E <: AbstractEnv}
     checkpoint_dir = test_dir*"/"*"checkpointed_models"
     model_list = readdir(checkpoint_dir)
     ordered_indices = sortperm(first.(split.(last.(split.(model_list, "_")), ".")))
@@ -66,7 +66,7 @@ function visualise_learning(env::Cartpole, test_dir::String)
         model = load_model(checkpoint_dir * "/" *mod)
         agent = AbstractAgent(model)
         println("Model checkpointed at $(iter)")
-        R = validation_episode!(env, agent)
+        R = validation_episode!(DQN, env, agent)
         println("Achieved reward = $(R)")
     end
     close!(env)

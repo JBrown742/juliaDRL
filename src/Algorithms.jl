@@ -11,10 +11,12 @@ using Shuffle
 using CUDA
 using Plots # used for API function
 using JSON # used for API function
+using Random
+using Distributions
 
 using ..juliaDRL: AbstractAgent, AbstractModel, AbstractEnv,
-step!, render!, reset!, close!, Cartpole, save_model, load_model,
-AbstractObservation, AbstractAction, DiscreteAct
+step!, render!, reset!, close!, Cartpole, Pendulum, save_model, load_model,
+AbstractObservation, AbstractAction, DiscreteAct, ContinuousAct
 
 export
     AbstractExperience, 
@@ -55,8 +57,7 @@ export
 
     ## PPO 
     PPO,
-    full_training_procedure!,
-    get_action
+    ContinuousPPO
 
 
 
@@ -65,6 +66,9 @@ include("./Algorithms/RL/Buffer.jl")
 include("./Algorithms/RL/DQN/DQN.jl")
 include("./Algorithms/RL/DQN/API.jl")
 include("./Algorithms/RL/PPO/PPO.jl")
+include("./Algorithms/RL/PPO/API.jl")
+include("./Algorithms/RL/ContinuousPPO/ContinuousPPO.jl")
+include("./Algorithms/RL/ContinuousPPO/API.jl")
 
 end # module Models
 

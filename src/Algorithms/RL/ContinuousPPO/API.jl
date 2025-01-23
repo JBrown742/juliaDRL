@@ -1,5 +1,5 @@
-function learn(env::E, alg::PPO; 
-    training_iters = 100,
+function learn(env::E, alg::ContinuousPPO; 
+    training_iters = 1000,
     checkpoint_freq=1, vals_per_checkpoint=10, 
     save_dir=pwd(), test_name="test"
 ) where {E <: AbstractEnv}
@@ -7,7 +7,7 @@ function learn(env::E, alg::PPO;
         "Agent" => Dict{String, Any}("model"=> repr(alg.central_agent.model)), 
         "Algorithm" => Dict{String, Any}(
             "batch_size" => alg.batch_size, 
-            "Optimizer"=> repr(alg.optimizer),
+            "Optimizer"=> repr(alg.optimizers),
             "N" => alg.N, "T" => alg.T, "K" => alg.K, 
             "λ" => alg.λ, "ϵ" => alg.ϵ, "γ" => alg.γ, 
             "c1" => alg.c1, "c2" => alg.c2
@@ -28,7 +28,7 @@ function learn(env::E, alg::PPO;
     end
     mkdir(model_dir)
     reward_history = Vector{Float64}()
-    best_reward = 0.0
+    best_reward = -10000
     best_model = deepcopy(alg.central_agent.model)
     # execute several learning episodes to fill the buffer
     # then repeat for the number of training iterations
@@ -39,16 +39,16 @@ function learn(env::E, alg::PPO;
             if reward_av > best_reward
                 best_reward = reward_av
                 best_model = deepcopy(alg.central_agent.model)
-                vizenv = Cartpole(500, render=true)
+                vizenv = Pendulum(200, render=true)
                 _ = validation_episode!(vizenv, alg, render=true)
                 close!(vizenv)
                 save_model(best_model, model_dir; model_info="iter_$(i)")
             end
             push!(reward_history, reward_av)
             println("Episode $(i):: Average reward is $(reward_av)")
-            if i % alg.sync_frequency == 0
-                update_actor_learners!(alg)
-            end
+        end
+        if i % alg.sync_frequency == 0
+            update_actor_learners!(alg)
         end
     end
     save_model(best_model, save_dir; model_info="best")
@@ -63,17 +63,19 @@ function learn(env::E, alg::PPO;
     end
 end
 
-function visualise_learning(::Type{PPO}, env::E, test_dir::String) where {E <: AbstractEnv}
-    checkpoint_dir = test_dir*"/"*"checkpointed_models"
-    model_list = readdir(checkpoint_dir)
-    ordered_indices = sortperm(first.(split.(last.(split.(model_list, "_")), ".")))
-    for mod in model_list[ordered_indices]
-        iter = split(split(mod, "_")[end], ".")[1]
-        model = load_model(checkpoint_dir * "/" *mod)
-        agent = AbstractAgent(model)
-        println("Model checkpointed at $(iter)")
-        R = validation_episode!(PPO, env, agent)
-        println("Achieved reward = $(R)")
-    end
-    close!(env)
-end
+# function visualise_learning(::Type{ContinuousPPO}, env::E, test_dir::String) where {E <: AbstractEnv}
+#     checkpoint_dir = test_dir*"/"*"checkpointed_models"
+#     model_list = readdir(checkpoint_dir)
+#     ordered_indices = sortperm(first.(split.(last.(split.(model_list, "_")), ".")))
+#     for mod in model_list[ordered_indices]
+#         iter = split(split(mod, "_")[end], ".")[1]
+#         models = Vector{AbstractModel}()
+#         for 
+#         load_model(checkpoint_dir * "/" * mod)
+#         agent = AbstractAgent(model)
+#         println("Model checkpointed at $(iter)")
+#         R = validation_episode!(PPO, env, agent)
+#         println("Achieved reward = $(R)")
+#     end
+#     close!(env)
+# end

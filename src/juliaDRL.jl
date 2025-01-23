@@ -9,6 +9,8 @@ export
     # Define abstract types to supertype our observation 
     # and model types
     AbstractAgent, 
+    SingleModelAgent, 
+    DualModelAgent, 
     AbstractModel,
     AbstractObservation,
     AbstractAction,
@@ -102,7 +104,9 @@ export
 
     PPO,
     full_training_procedure!,
-    get_action
+    get_action,
+
+    ContinuousPPO
 
 
 

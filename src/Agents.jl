@@ -13,6 +13,8 @@ export
     # Define abstract types to supertype our observation 
     # and model types
     AbstractAgent, 
+    SingleModelAgent, 
+    DualModelAgent, 
     AbstractModel,
     AbstractObservation,
     AbstractAction,
