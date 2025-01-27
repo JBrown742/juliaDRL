@@ -14,8 +14,12 @@ using JSON # used for API function
 using Random
 using Distributions
 
-using ..juliaDRL: AbstractAgent, AbstractModel, AbstractEnv,
-step!, render!, reset!, close!, Cartpole, Pendulum, save_model, load_model,
+using ..juliaDRL: AbstractAgent, StandardActorCritic, CombinedActorCritic, 
+StandardPolicy, StandardValue,
+AbstractModel, AbstractEnv,
+step!, render!, reset!, close!, 
+Cartpole, Pendulum, 
+save_agent, load_agent,
 AbstractObservation, AbstractAction, DiscreteAct, ContinuousAct
 
 export

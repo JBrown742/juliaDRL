@@ -3,16 +3,18 @@ mutable struct CarRacing{S, A} <: AbstractEnv
     pyenv::PyObject
     state::Array{Float32, 3}
     terminal::Bool
-    actions::Vector{Int}
+    actions::Vector{Float32}
     function CarRacing(len::Int, pyenv::PyObject)
         obs, info = pyenv.reset()
+        if render
+            pe = gym.make("CarRacing-v3", domain_randomize=true, render_mode="human");
+        else            
+            pe = gym.make("CarRacing-v3", domain_randomize=true);
+        end
         num_actions = pyenv.action_space.n
         return new{Array{Float32, 3}, Int}(len, pyenv, Float32.(obs) ./ 255, false, collect(0:num_actions-1))
     end
 end
-
-# state_type(::Type{C}) where C <: CarRacing = Vector{Float64}
-# action_type(::Type{C}) where C <: CarRacing = Int
 
 function step!(env::CarRacing, action::Int)
     act = env.actions[action]

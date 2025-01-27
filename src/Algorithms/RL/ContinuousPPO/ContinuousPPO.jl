@@ -7,9 +7,9 @@ mutable struct ContinuousPPO <: AbstractAlgorithm
     N::Int # Number of concurrent workers for gathering experience segments.
     T::Int # Trajectory learning segment length 
     K::Int # Epoch, number of updates to carry out with a given trajectory.
-    central_agent::AbstractAgent # this holds the single central agent
+    central_agent::Union{StandardActorCritic, CombinedActorCritic} # this holds the single central agent
     # actor learners will be defined by takingn the model from the central agent, and the policies from the list of policies
-    actor_learners::Vector{AbstractAgent} 
+    worker_agents::Union{Vector{StandardActorCritic}, Vector{CombinedActorCritic}}
     #parameters
     batch_size::Int
     γ::Float32
@@ -19,27 +19,24 @@ mutable struct ContinuousPPO <: AbstractAlgorithm
     c2::Float32
     sync_frequency::Int
     advantage_coefficients::Vector{Float32}
-    optimizers::Vector{AbstractRule}
-    optimizer_s::Vector{NamedTuple}
     function ContinuousPPO(N::Int, T::Int, K::Int, agent::A, batch_size::Int, γ::Float64, λ::Float64, 
-        ϵ::Float64, c1::Float64, c2::Float64, sync_frequency::Int, optimizer::Vector{O}) where {A <: AbstractAgent, O <: AbstractRule}
-        m = agent.model
-        # |> gpu -- removing GPU functionality for now
-        als = [AbstractAgent(deepcopy(m)) for i in 1:N]
+        ϵ::Float64, c1::Float64, c2::Float64, sync_frequency::Int) where {A <: AbstractAgent}
+        """
+        A dispatch for full control implementing sensible default params
+        """
+        wrkrs = [deepcopy(agent) for _ in 1:N]
         exponents = collect(0:T*100)
         advantage_coefficients = (λ * γ) .^ exponents
-        su = [Flux.setup(op, mod) for (op, mod) in zip(optimizer, agent.model)]
-        return new(N, T, K, agent, als, batch_size, γ, λ, ϵ, c1, c2, sync_frequency, advantage_coefficients, optimizer, su)
+        return new(N, T, K, agent, wrkrs, batch_size, γ, λ, ϵ, c1, c2, sync_frequency, advantage_coefficients)
     end
-    function ContinuousPPO(N::Int, T::Int, K::Int,  agent::A,
-        optimizer::Vector{O}) where {A <: AbstractAgent, O <: AbstractRule}
-        m = agent.model
-        # |> gpu -- removing GPU functionality for now
-        als = [AbstractAgent(deepcopy(m)) for i in 1:N]
+    function ContinuousPPO(N::Int, T::Int, K::Int,  agent::A) where {A <: AbstractAgent}
+        """
+        A dispatch for implementing sensible default params
+        """
+        wrkrs = [deepcopy(agent) for _ in 1:N]
         exponents = collect(0:T*100)
         advantage_coefficients = (0.95 * 0.99) .^ exponents
-        su = [Flux.setup(op, mod) for (op, mod) in zip(optimizer, agent.model)]
-        return new(N, T, K, agent, als, 64, 0.99, 0.95, 0.2, 0.8, 0.001, 2, advantage_coefficients, optimizer, su)
+        return new(N, T, K, agent, wrkrs, 64, 0.99, 0.95, 0.2, 0.8, 0.001, 2, advantage_coefficients)
     end
 
 end
@@ -62,40 +59,61 @@ function train!(alg::ContinuousPPO, transitions::Vector{Experience}, probabiliti
         filter!(x -> x ∉ batch_indices, available_batch_indices)
         states = Vector{AbstractObservation}()
         actions = Vector{ContinuousAct}() # currently ContinuousPPO will only support Continuous actions
-        next_states = Vector{AbstractObservation}()
-        rewards = Vector{Float32}()
-        terminals = Vector{Bool}()
+        # All of the work with next states, rewards and terminals is done when calculating
+        # the advantages.
         for experience in transitions[batch_indices] # iteratively fill data vectors
             push!(states, experience.state)
             push!(actions, experience.action)
-            push!(next_states, experience.next_state)
-            push!(rewards, experience.reward)
-            push!(terminals, experience.done)
         end
         batch_probabilities = probabilities[batch_indices]
         batch_advantages = (advantages[batch_indices] .- mean(advantages[batch_indices])) ./ std(advantages[batch_indices])
-        batch_bellman_targets = reshape(bellman_targets[batch_indices], (1, length(batch_indices)))
-
-        ∇ = Flux.gradient(alg.central_agent.model[1]) do m # track gradients
-            μ, log_σ = dropdims.(m(reduce(hcat, states)), dims=1)
-            σ = exp.(log_σ)
-            new_log_probs = log_gauss_pdf(actions, μ, σ)
-            old_log_probs = batch_probabilities
-            r = exp.(new_log_probs .- old_log_probs)
-            clamped_r = clamp.(r, 1 - alg.ϵ, 1 + alg.ϵ)
-            vals = minimum.(batch_advantages .* clamped_r)
-            L_CLIP = 1 * mean(vals)
-            # entropy = 0.5 .* log.(2 * π .* σ .^ 2 .+ 0.5) # there is a closed form for the entropy of a gaussian
-            -1 * L_CLIP
-        end
-        Flux.update!(alg.optimizer_s[1], alg.central_agent.model[1], ∇[1])
-        ∇2 = Flux.gradient(alg.central_agent.model[2]) do m # track gradients
-            state_values = m(reduce(hcat, states))
-            Flux.Losses.mse(batch_bellman_targets, state_values)
-        end
-        Flux.update!(alg.optimizer_s[2], alg.central_agent.model[2], ∇2[1])
+        batch_bellman_targets = bellman_targets[batch_indices]
+        gradient_calculation_and_update!(alg, alg.central_agent, states, actions, batch_advantages, batch_probabilities, batch_bellman_targets)
     end
 end
+
+function gradient_calculation_and_update!(alg::ContinuousPPO, agent::StandardActorCritic, states::Vector{AbstractObservation}, 
+    actions::Vector{ContinuousAct}, batch_advantages::Vector{Float32}, batch_probabilities::Vector{Float32}, 
+    batch_bellman_targets::Vector{Float32})
+    ∇_actor = Flux.gradient(agent.actor_model.model) do m # track gradients
+        μ, log_σ = dropdims.(m(reduce(hcat, states)), dims=1)
+        σ = exp.(log_σ)
+        new_log_probs = log_gauss_pdf(actions, μ, σ)
+        old_log_probs = batch_probabilities
+        r = exp.(new_log_probs .- old_log_probs)
+        clamped_r = clamp.(r, 1 - alg.ϵ, 1 + alg.ϵ)
+        vals = minimum.(batch_advantages .* clamped_r)
+        L_CLIP = 1 * mean(vals)
+        # entropy = 0.5 .* log.(2 * π .* σ .^ 2 .+ 0.5) # there is a closed form for the entropy of a gaussian
+        -1 * L_CLIP
+    end
+    Flux.update!(agent.actor_model._optimizer_state, agent.actor_model.model, ∇_actor[1])
+    ∇_critic = Flux.gradient(agent.critic_model.model) do m # track gradients
+        state_values = dropdims(m(reduce(hcat, states)), dims=1)
+        Flux.Losses.mse(batch_bellman_targets, state_values)
+    end
+    Flux.update!(agent.critic_model._optimizer_state, agent.critic_model.model, ∇_critic[1])
+end
+
+function gradient_calculation_and_update!(alg::ContinuousPPO, agent::CombinedActorCritic, states::Vector{AbstractObservation}, 
+    actions::Vector{ContinuousAct}, batch_advantages::Vector{Float32}, batch_probabilities::Vector{Float32}, 
+    batch_bellman_targets::Vector{Float32})
+    ∇ = Flux.gradient(agent.combined_model.model) do m # track gradients
+        μ, log_σ, state_values = dropdims.(m(reduce(hcat, states)), dims=1)
+        σ = exp.(log_σ)
+        new_log_probs = log_gauss_pdf(actions, μ, σ)
+        old_log_probs = batch_probabilities
+        r = exp.(new_log_probs .- old_log_probs)
+        clamped_r = clamp.(r, 1 - alg.ϵ, 1 + alg.ϵ)
+        vals = minimum.(batch_advantages .* clamped_r)
+        L_CLIP = 1 * mean(vals)
+        L_value_loss = Flux.Losses.mse(batch_bellman_targets, state_values)
+        # entropy = 0.5 .* log.(2 * π .* σ .^ 2 .+ 0.5) # there is a closed form for the entropy of a gaussian
+        alg.c1 * L_value_loss - L_CLIP
+    end
+    Flux.update!(agent.combined_model._optimizer_state, agent.combined_model.model, ∇[1])
+end
+
 
 function collect_trajectory_segment_continuous!(env::E, agent::A, info::Dict{Symbol, Any}) where {E <: AbstractEnv, A <: AbstractAgent}
     T::Int = info[:T]
@@ -155,7 +173,7 @@ end
 
 function full_training_procedure!(alg::ContinuousPPO, envs::Vector{E}) where {E <: AbstractEnv}
     info = Dict{Symbol, Any}(:T => alg.T, :γ => alg.γ, :advantage_coefficients => alg.advantage_coefficients)
-    agents = alg.actor_learners
+    agents = alg.worker_agents
     results = pmap(collect_trajectory_segment_continuous!, WorkerPool(workers()), envs, agents, fill(info, alg.N))
     all_transitions, all_probabilities, all_advantages, all_targets, all_errors = unzip(results)
     train!(alg, all_transitions, all_probabilities, all_advantages, all_targets, all_errors)
@@ -175,7 +193,7 @@ function validation_episode!(::Type{ContinuousPPO}, env::E, agent::T; render::Bo
     step=0
     while env.terminal == false # bool flag to denote whether routing has finished
         # calculate the mode outputs based on the current graph
-        action, value, probs = get_action(ContinuousPPO, agent, state)
+        action, value, probs = get_action(ContinuousPPO, agent, state; det=true)
         if render==true
             render!(env)
         end
@@ -189,23 +207,43 @@ function validation_episode!(::Type{ContinuousPPO}, env::E, agent::T; render::Bo
     return sum(episode_reward)
 end
 
-function update_actor_learners!(alg::ContinuousPPO)
-    for (idx,p) in enumerate(Flux.params(alg.central_agent.model[1]))
+function update_actor_learners!(agent::CombinedActorCritic, alg::ContinuousPPO)
+    for (idx,p) in enumerate(Flux.params(agent.combined_model.model))
         for agent_idx in 1:alg.N
-            Flux.params(alg.actor_learners[agent_idx].model[1])[idx] .= copy(p |> cpu)
+            Flux.params(alg.worker_agents[agent_idx].combined_model.model)[idx] .= copy(p |> cpu)
         end
     end
-    for (idx,p) in enumerate(Flux.params(alg.central_agent.model[2]))
+end
+
+function update_actor_learners!(agent::StandardActorCritic, alg::ContinuousPPO)
+    for (idx,p) in enumerate(Flux.params(agent.actor_model.model))
         for agent_idx in 1:alg.N
-            Flux.params(alg.actor_learners[agent_idx].model[2])[idx] .= copy(p |> cpu)
+            Flux.params(alg.worker_agents[agent_idx].actor_model.model)[idx] .= copy(p |> cpu)
+        end
+    end
+    for (idx,p) in enumerate(Flux.params(agent.critic_model.model))
+        for agent_idx in 1:alg.N
+            Flux.params(alg.worker_agents[agent_idx].critic_model.model)[idx] .= copy(p |> cpu)
         end
     end
 end
 
 # ------------ get_actions functions ------- #
-function get_action(::Type{ContinuousPPO}, agent::A, obs::O; det=false, mask=nothing) where {A <: AbstractAgent, O <: AbstractObservation}
-    μ, log_σ = agent.model[1](obs)
-    value = agent.model[2](obs)
+function get_action(::Type{ContinuousPPO}, agent::StandardActorCritic, obs::O; det=false, mask=nothing) where {O <: AbstractObservation}
+    μ, log_σ = agent.actor_model(obs)
+    value = agent.critic_model(obs)
+    σ = exp.(log_σ)
+    if det == true
+        action = μ[1]
+    else
+        d = Normal(Float64(μ[1]), σ[1])
+        action = Float32(rand(d, 1)[1])
+    end
+    return action, value[1], log_gauss_pdf(action, μ[1], σ[1])
+end
+
+function get_action(::Type{ContinuousPPO}, agent::CombinedActorCritic, obs::O; det=false, mask=nothing) where {O <: AbstractObservation}
+    μ, log_σ, value = agent.combined_model(obs)
     σ = exp.(log_σ)
     if det == true
         action = μ[1]
