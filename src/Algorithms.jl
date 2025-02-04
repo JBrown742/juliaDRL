@@ -60,8 +60,7 @@ export
     visualise_learning,
 
     ## PPO 
-    PPO,
-    ContinuousPPO
+    PPO
 
 
 
@@ -70,9 +69,8 @@ include("./Algorithms/RL/Buffer.jl")
 include("./Algorithms/RL/DQN/DQN.jl")
 include("./Algorithms/RL/DQN/API.jl")
 include("./Algorithms/RL/PPO/PPO.jl")
+include("./Algorithms/RL/PPO/Utilities.jl")
 include("./Algorithms/RL/PPO/API.jl")
-include("./Algorithms/RL/ContinuousPPO/ContinuousPPO.jl")
-include("./Algorithms/RL/ContinuousPPO/API.jl")
 
 end # module Models
 

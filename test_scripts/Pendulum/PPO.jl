@@ -41,7 +41,7 @@ agent = StandardActorCritic(actor_model, critic_model)
 
 
 # agent = CombinedActorCritic(combined_model)
-alg = ContinuousPPO(5, 1024, 10, agent, 256, 0.99, 0.95, 0.2, 1., 0.0, 5)
+alg = PPO(ContinuousAct, 5, 1024, 10, agent, 256, 0.99, 0.95, 0.2, 1., 0.0, 5)
 
 learn(env, alg; training_iters=1000, test_name="bogey_test")
 close!(env)
