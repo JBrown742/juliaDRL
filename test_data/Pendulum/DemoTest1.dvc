@@ -1,0 +1,6 @@
+outs:
+- md5: 21c6864db6043a7e9e804343578cacbe.dir
+  size: 1299912
+  nfiles: 50
+  hash: md5
+  path: DemoTest1
