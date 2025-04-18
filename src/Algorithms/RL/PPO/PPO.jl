@@ -1,9 +1,3 @@
-#
-# Nowhere should the algorithm be dependent on the state type
-# as long as the state is of one of the 3 defined types, then it only depends on the action type
-# and in that case an algorithm which supports two different action types may differ enough
-# to warrant two sparate structs
-
 # using G as the abtract typeholder for action from the synonym 'gesture' since A is used for agent
 mutable struct PPO{G <: AbstractAction} <: AbstractAlgorithm
     N::Int # Number of concurrent workers for gathering experience segments.
@@ -37,7 +31,7 @@ mutable struct PPO{G <: AbstractAction} <: AbstractAlgorithm
 
 end
 
-## The environment is still baked into this algo...
+
 function train!(alg::PPO{G}, transitions::Vector{Experience}, probabilities::Union{Vector{Vector{Float32}}, Vector{Float32}},
     advantages::Vector{Float32}, bellman_targets::Vector{Float32}, bellman_errors::Vector{Float32}) where {G <: AbstractAction}
     # initialise vectors to store batched data
@@ -68,6 +62,9 @@ function train!(alg::PPO{G}, transitions::Vector{Experience}, probabilities::Uni
     end
 end
 
+# ------------------- Dispatches for the gradient calculation depending on whether ------------------- #
+# --------------------------------- parameters are shared and ---------------------------------------- #
+# ----------------------- whether we are using discrete or continuous actions ------------------------ #
 function gradient_calculation_and_update!(alg::PPO{DiscreteAct}, agent::StandardActorCritic, states::Vector{AbstractObservation}, 
     actions::Vector{DiscreteAct}, batch_advantages::Vector{Float32}, batch_probabilities::Vector{Vector{Float32}}, 
     batch_bellman_targets::Vector{Float32})
@@ -156,6 +153,9 @@ function gradient_calculation_and_update!(alg::PPO{ContinuousAct}, agent::Combin
     Flux.update!(agent.combined_model._optimizer_state, agent.combined_model.model, ∇[1])
 end
 
+
+
+
 function collect_trajectory_segment!(env::E, agent::A, info::Dict{Symbol, Any}) where {E <: AbstractEnv, A <: AbstractAgent}
     T::Int = info[:T]
     γ::Float32 = info[:γ]
@@ -226,11 +226,6 @@ function full_training_procedure!(alg::PPO{G}, envs::Vector{E}) where {E <: Abst
 end
 
 
-function validation_episode!(env::E, alg::PPO{G}; render::Bool=false) where {E<:AbstractEnv, G <: AbstractAction}
-    # initialise vectors to store the history of states actions and rewards for the entire episode
-    return validation_episode!(alg, env, alg.central_agent; render=render)
-end
-
 function validation_episode!(alg::PPO{G}, env::E, agent::A; render::Bool=false) where {E<:AbstractEnv, A <: AbstractAgent, G <: AbstractAction}
     # initialise vectors to store the history of states actions and rewards for the entire episode
     state = reset!(env)
@@ -253,119 +248,9 @@ function validation_episode!(alg::PPO{G}, env::E, agent::A; render::Bool=false) 
     end
     return sum(episode_reward)
 end
-# Are these the exact same as ContinuousPPO? Do we need them??
-function update_actor_learners!(agent::CombinedActorCritic, alg::PPO{G}) where {G <: AbstractAction}
-    for (idx,p) in enumerate(Flux.params(agent.combined_model.model))
-        for agent_idx in 1:alg.N
-            Flux.params(alg.worker_agents[agent_idx].combined_model.model)[idx] .= copy(p |> cpu)
-        end
-    end
-end
 
-function update_actor_learners!(agent::StandardActorCritic, alg::PPO{G}) where {G <: AbstractAction}
-    for (idx,p) in enumerate(Flux.params(agent.actor_model.model))
-        for agent_idx in 1:alg.N
-            Flux.params(alg.worker_agents[agent_idx].actor_model.model)[idx] .= copy(p |> cpu)
-        end
-    end
-    for (idx,p) in enumerate(Flux.params(agent.critic_model.model))
-        for agent_idx in 1:alg.N
-            Flux.params(alg.worker_agents[agent_idx].critic_model.model)[idx] .= copy(p |> cpu)
-        end
-    end
-end
-
-function unzip(a; dims = 1)
-    return map(x -> cat(getfield.(a, x)..., dims=dims), fieldnames(eltype(a)))
-end
-
-function masked_probabilities(mask::Array{Float32}, outputs::Array{Float32})
-    weights = softmax(mask .+ outputs; dims = 1)
-    return weights
-end
-
-function infer_mask(probabilities::Vector{Float32})
-    idxs = findall(iszero, probabilities)
-    N = length(probabilities)
-    mask = zeros(Float32, N) # build a mask vector to zero out all nodes ∉ NH
-    mask[idxs] .= mask[idxs] .- Inf32
-    return mask
-    fun
-end
-
-# ------------ get_actions functions ------- #
-function get_action(::Type{PPO{DiscreteAct}}, agent::CombinedActorCritic, obs::O; det=false, mask=nothing) where {O <: AbstractObservation}
-    outputs, value = agent.combined_model(obs)
-    if isnothing(mask)
-        mask = ones(length(outputs))
-    end
-    masked_outputs = outputs .+ mask
-    ws = Float32.(softmax(masked_outputs; dims = 1))
-    indices = collect(1:length(
-        funws))
-    if det == true
-        action = argmax(ws)
-    else
-        action = sample(indices, Weights(ws))
-    end
-    return action, value, ws
-end
-
-function get_action(::Type{PPO{DiscreteAct}}, agent::StandardActorCritic, obs::O; det=false, mask=nothing) where {O <: AbstractObservation}
-    outputs = agent.actor_model(obs)
-    value = agent.critic_model(obs)
-    if isnothing(mask)
-        mask = ones(length(outputs))
-    end
-    masked_outputs = outputs .+ mask
-    ws = Float32.(softmax(masked_outputs; dims = 1))
-    indices = collect(1:length(ws))
-    if det == true
-        action = argmax(ws)
-    else
-        action = sample(indices, Weights(ws))
-    end
-    return action, value, ws
-end
-
-function get_action(::Type{PPO{ContinuousAct}}, agent::StandardActorCritic, obs::O; det=false) where {O <: AbstractObservation}
-    μ, log_σ = agent.actor_model(obs)
-    value = agent.critic_model(obs)
-    σ = exp.(log_σ)
-    if det == true
-        action = μ[1]
-    else
-        d = Normal(Float64(μ[1]), σ[1])
-        action = Float32(rand(d, 1)[1])
-    end
-    return action, value[1], log_gauss_pdf(action, μ[1], σ[1])
-end
-
-function get_action(::Type{PPO{ContinuousAct}}, agent::CombinedActorCritic, obs::O; det=false) where {O <: AbstractObservation}
-    μ, log_σ, value = agent.combined_model(obs)
-    σ = exp.(log_σ)
-    if det == true
-        action = μ[1]
-    else
-        d = Normal(Float64(μ[1]), σ[1])
-        action = Float32(rand(d, 1)[1])
-    end
-    return action, value[1], log_gauss_pdf(action, μ[1], σ[1])
-end
-# ------------------------  Dispatches for use within data collection ------- #
-function get_action(::Type{PPO{DiscreteAct}}, agent::A, env::E; det=false) where {E <: AbstractEnv, A <: AbstractAgent}
-    return get_action(PPO{DiscreteAct}, agent, env.state; det=det, mask=env.action_mask)
-end
-
-function get_action(::Type{PPO{ContinuousAct}}, agent::A, env::E; det=false) where {E <: AbstractEnv, A <: AbstractAgent}
-    return get_action(PPO{ContinuousAct}, agent, env.state; det=det)
-end
-
-function log_gauss_pdf(x::Float32, μ::Float32, σ::Float32=0.05f0)
-    return -log(σ) - log(sqrt(2 * π))  - 0.5 * (((x - μ)/σ) ^ 2)
-end
-
-function log_gauss_pdf(x::Vector{Float32}, μ::Vector{Float32}, σ::Vector{Float32})
-    return -log.(σ) .- log(sqrt(2 * π))  .- 0.5 * (((x .- μ) ./ σ) .^ 2)
+function validation_episode!(env::E, alg::PPO{G}; render::Bool=false) where {E<:AbstractEnv, G <: AbstractAction}
+    # initialise vectors to store the history of states actions and rewards for the entire episode
+    return validation_episode!(alg, env, alg.central_agent; render=render)
 end
      

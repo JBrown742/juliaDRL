@@ -1,7 +1,5 @@
-using Revise
 using juliaDRL
 using Flux
-using StatsBase
 ## ----------------- Standard actor-critic part ------------------ ## 
 env = Pendulum(200)
 
@@ -22,12 +20,11 @@ critic_optim = Flux.Optimisers.Adam(2e-3)
 critic_model = DNN(critic_network, critic_optim)
 
 agent = StandardActorCritic(actor_model, critic_model)
-# alg = ContinuousPPO(4, 1024, 10, agent, 128, 0.9, 0.95, 0.2, 0.5, 0.0, 5)
 
 ## ------------------------------- Parameter Sharing part ------------------------ ##
 #
 # Here gradient interference and scaling disparity between the actor heads and the value head
-# present a challenge. Can tackle using reward normalisation and adding complexiy to the value head.
+# present a challenge. Can tackled using reward normalisation and adding complexiy to the value head.
 #
 # env = Pendulum(200)
 
@@ -43,8 +40,7 @@ agent = StandardActorCritic(actor_model, critic_model)
 # agent = CombinedActorCritic(combined_model)
 alg = PPO(ContinuousAct, 5, 1024, 10, agent, 256, 0.99, 0.95, 0.2, 1., 0.0, 5)
 
-learn(env, alg; training_iters=1000, test_name="bogey_test")
+learn(env, alg; training_iters=1000, save_dir=".", test_name="DemoTest2")
 close!(env)
-fill(deepcopy(env), alg.N)
 vizenv = Pendulum(500; render=true)
-visualise_learning(alg,  vizenv, "/home/johnny/Documents/PersonalCode/juliaDRL/test_data/Pendulum/PPOContinuousTest2")
+visualise_learning(alg,  vizenv, "/home/johnny/Documents/PersonalCode/juliaDRL/DemoTest2")

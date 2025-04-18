@@ -33,9 +33,6 @@ function render!(env::Cartpole)
 end
 
 function reset!(env::Cartpole) 
-    if env.renderize == true
-        env.pyenv = gym.make("CartPole-v1", render_mode="human");
-    end
     observation, info = env.pyenv.reset()
     env.state = normalize(observation)
     env.terminal = false
@@ -45,6 +42,12 @@ end
 function close!(env::Cartpole)
     env.pyenv.close()
 end
+
+function renderize!(env::Cartpole)
+    env.pyenv = gym.make("CartPole-v1", render_mode="human");
+    env.renderize = true
+end
+
 
 # =======================... Utility functions...================================== #
 

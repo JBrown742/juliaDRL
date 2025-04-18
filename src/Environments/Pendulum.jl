@@ -35,14 +35,17 @@ function close!(env::Pendulum)
 end
 
 function reset!(env::Pendulum) 
-    if env.renderize == true
-        env.pyenv = gym.make("Pendulum-v1", render_mode="human");
-    end
     (observation, info) = env.pyenv.reset()
     env.state = normalize(env, observation)
     env.terminal = false
     return normalize(env, observation)
 end
+
+function renderize!(env::Pendulum)
+    env.pyenv = gym.make("Pendulum-v1", render_mode="human");
+    env.renderize=true
+end
+
 
 # =======================... Utility functions...================================== #
 

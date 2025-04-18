@@ -26,7 +26,8 @@ export
     step!,
     render!,
     reset!, 
-    close!
+    close!,
+    renderize!
     # normalise
 
 

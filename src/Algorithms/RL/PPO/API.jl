@@ -31,6 +31,8 @@ function learn(env::E, alg::PPO;
     reward_history = Vector{Float64}()
     best_reward = -1e6
     best_agent = deepcopy(alg.central_agent)
+    vizenv = deepcopy(env)
+    renderize!(vizenv)
     # execute several learning episodes to fill the buffer
     # then repeat for the number of training iterations
     for i in 1:training_iters 
@@ -40,10 +42,8 @@ function learn(env::E, alg::PPO;
             if reward_av > best_reward
                 best_reward = reward_av
                 best_agent = deepcopy(alg.central_agent)
-                vizenv = deepcopy(env)
-                vizenv.renderize = true
+
                 _ = validation_episode!(vizenv, alg, render=true)
-                close!(vizenv)
                 save_agent(best_agent, agent_dir; agent_info="iter_$(i)")
             end
             push!(reward_history, reward_av)
@@ -53,6 +53,7 @@ function learn(env::E, alg::PPO;
             update_actor_learners!(alg.central_agent, alg)
         end
     end
+    close!(vizenv)
     save_agent(best_agent, save_dir; agent_info="best")
     plot(reward_history, title="average return for checkpointed agents", linesize=2, legend=false);
     xlabel!("learning iteration", fontsize=20);
