@@ -1,9 +1,18 @@
 struct DNN <: AbstractModel
     model::Chain
+    optimizer::Union{AbstractRule, Nothing}
+    _optimizer_state::Union{NamedTuple, Nothing}
+    function DNN(model::C, optimizer::O) where {O <: AbstractRule, C <: Chain}
+        return new(model, optimizer, Flux.setup(optimizer, model))
+    end
+    function DNN(model::C) where {C <: Chain}
+        return new(model, nothing, nothing)
+    end
 end
+
 function (m::DNN)(state::VectorObs)
     outputs = m.model(reshape(state, (length(state), 1)))
-    if length(outputs) > 1
+    if typeof(outputs) <: Tuple
         return dropdims.(outputs, dims=2)
     else
         return dropdims(outputs, dims=2)
@@ -33,32 +42,11 @@ function save_model(DNN_model::DNN, save_dir::String; model_info::String="")
     if model_info==""
         @save save_dir * "/model_$(num_saved_models+1).bson" model
     else
-        @save save_dir * "/model_" * model_info * ".bson" model
+        @save save_dir * "/" * model_info * "_model.bson" model
     end
 end
 
-function load_model(load_path::String)
-    @load load_path model
-    DNN_model = DNN(model)
-    return DNN_model
-end
-
-function save_model(DNN_model::Vector{M}, save_dir::String; model_info::String="") where {M <: AbstractModel}
-    if !isdir(save_dir)
-        mkdir(save_dir)
-    end
-    num_saved_models = length(readdir(save_dir))
-    for (i, mod) in enumerate(DNN_model)
-        if model_info==""
-            @save save_dir * "/model_$(num_saved_models+1)_$(i).bson" mod
-        else
-            @save save_dir * "/model_" * model_info * "_$(i).bson" mod
-        end
-    end
-end
-
-function load_model(load_path::String)
-
+function load_model(::Type{DNN}, load_path::String)
     @load load_path model
     DNN_model = DNN(model)
     return DNN_model

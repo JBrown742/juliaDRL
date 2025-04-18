@@ -14,8 +14,12 @@ using JSON # used for API function
 using Random
 using Distributions
 
-using ..juliaDRL: AbstractAgent, AbstractModel, AbstractEnv,
-step!, render!, reset!, close!, Cartpole, Pendulum, save_model, load_model,
+using ..juliaDRL: AbstractAgent, StandardActorCritic, CombinedActorCritic, 
+StandardPolicy, StandardValue,
+AbstractModel, AbstractEnv,
+step!, render!, reset!, close!, renderize!,
+Cartpole, Pendulum, 
+save_agent, load_agent,
 AbstractObservation, AbstractAction, DiscreteAct, ContinuousAct
 
 export
@@ -56,8 +60,7 @@ export
     visualise_learning,
 
     ## PPO 
-    PPO,
-    ContinuousPPO
+    PPO
 
 
 
@@ -66,9 +69,8 @@ include("./Algorithms/RL/Buffer.jl")
 include("./Algorithms/RL/DQN/DQN.jl")
 include("./Algorithms/RL/DQN/API.jl")
 include("./Algorithms/RL/PPO/PPO.jl")
+include("./Algorithms/RL/PPO/Utilities.jl")
 include("./Algorithms/RL/PPO/API.jl")
-include("./Algorithms/RL/ContinuousPPO/ContinuousPPO.jl")
-include("./Algorithms/RL/ContinuousPPO/API.jl")
 
 end # module Models
 

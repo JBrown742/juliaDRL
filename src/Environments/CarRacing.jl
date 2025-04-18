@@ -1,20 +1,23 @@
-mutable struct CarRacing{S, A} <: AbstractEnv
-    episode_length::Int
+mutable struct CarRacing <: AbstractEnv
+    episode_length::Int64
     pyenv::PyObject
-    state::Array{Float32, 3}
+    state::Array{Float64}
     terminal::Bool
-    actions::Vector{Int}
+    action_type::Vector{Type}
+    action_extent::Vector{Tuple{Float32, Float32}}
+    renderize::Bool
     function CarRacing(len::Int, pyenv::PyObject)
         obs, info = pyenv.reset()
-        num_actions = pyenv.action_space.n
-        return new{Array{Float32, 3}, Int}(len, pyenv, Float32.(obs) ./ 255, false, collect(0:num_actions-1))
+        if render
+            pe = gym.make("CarRacing-v3", domain_randomize=true, render_mode="human");
+        else            
+            pe = gym.make("CarRacing-v3", domain_randomize=true);
+        end
+        return new(len, pyenv, Float32.(obs) ./ 255, false, [Float32, Float32, Float32], [(-1,1), (0,1), (0,1)], render)
     end
 end
 
-# state_type(::Type{C}) where C <: CarRacing = Vector{Float64}
-# action_type(::Type{C}) where C <: CarRacing = Int
-
-function step!(env::CarRacing, action::Int)
+function step!(env::CarRacing, action::Vector{Int})
     act = env.actions[action]
     observation, reward, terminated, truncated, info = env.pyenv.step(act)
     env.state = observation

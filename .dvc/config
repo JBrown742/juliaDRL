@@ -1,0 +1,5 @@
+[core]
+    autostage = true
+    remote = local_store
+['remote "local_store"']
+    url = /home/johnny/Documents/PersonalCode/juliaDRLDatabase

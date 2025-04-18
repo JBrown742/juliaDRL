@@ -5,6 +5,7 @@ mutable struct Pendulum <: AbstractEnv
     terminal::Bool
     action_type::Type
     action_extent::Tuple{Float32, Float32}
+    renderize::Bool
     function Pendulum(len::Int64; render=false)
         if render
             pe = gym.make("Pendulum-v1", render_mode="human");
@@ -12,12 +13,12 @@ mutable struct Pendulum <: AbstractEnv
             pe = gym.make("Pendulum-v1");
         end
         obs, info = pe.reset()
-        return new(len, pe, obs, false, Float32, (-2f0, 2f0))
+        return new(len, pe, obs, false, Float32, (-2f0, 2f0), render)
     end
 end
 
 function step!(env::Pendulum, action::Union{Float32, Float64})
-    scaled_action = clamp(action, env.action_extent[1], env.action_extent[2])
+    scaled_action = clamp(2 * action, env.action_extent[1], env.action_extent[2])
     observation, reward, terminated, truncated, info = env.pyenv.step([scaled_action])
     env.state = normalize(env, observation)
     env.terminal = terminated
@@ -39,6 +40,12 @@ function reset!(env::Pendulum)
     env.terminal = false
     return normalize(env, observation)
 end
+
+function renderize!(env::Pendulum)
+    env.pyenv = gym.make("Pendulum-v1", render_mode="human");
+    env.renderize=true
+end
+
 
 # =======================... Utility functions...================================== #
 
