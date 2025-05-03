@@ -63,6 +63,8 @@ export
     render!,
     reset!, 
     close!,
+    renderize!,
+    clone,
 
     normalise    
        

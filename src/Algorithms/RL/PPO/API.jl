@@ -31,18 +31,20 @@ function learn(env::E, alg::PPO;
     reward_history = Vector{Float64}()
     best_reward = -1e6
     best_agent = deepcopy(alg.central_agent)
+    reset!(env)
     vizenv = deepcopy(env)
     renderize!(vizenv)
+    envs = [clone(env) for _ in 1:alg.N] # WE NOW NEED ALL ENVIRONMENTS TO IMPLEMET THE CLONE FUNCTION!!!!!!!!!!!!!!
     # execute several learning episodes to fill the buffer
     # then repeat for the number of training iterations
     for i in 1:training_iters 
-        full_training_procedure!(alg, fill(deepcopy(env), alg.N))
+
+        full_training_procedure!(alg, envs)
         if i % checkpoint_freq == 0
             reward_av = mean([validation_episode!(env, alg) for _ in 1:vals_per_checkpoint])
             if reward_av > best_reward
                 best_reward = reward_av
                 best_agent = deepcopy(alg.central_agent)
-
                 _ = validation_episode!(vizenv, alg, render=true)
                 save_agent(best_agent, agent_dir; agent_info="iter_$(i)")
             end

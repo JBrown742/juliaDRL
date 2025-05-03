@@ -17,10 +17,10 @@ using Distributions
 using ..juliaDRL: AbstractAgent, StandardActorCritic, CombinedActorCritic, 
 StandardPolicy, StandardValue,
 AbstractModel, AbstractEnv,
-step!, render!, reset!, close!, renderize!,
+step!, render!, reset!, close!, renderize!, clone,
 Cartpole, Pendulum, 
 save_agent, load_agent,
-AbstractObservation, AbstractAction, DiscreteAct, ContinuousAct
+AbstractObservation, AbstractAction, DiscreteAct, ContinuousAct, MultiContinuousAct, MultiDiscreteAct
 
 export
     AbstractExperience, 

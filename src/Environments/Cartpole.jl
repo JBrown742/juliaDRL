@@ -17,6 +17,13 @@ mutable struct Cartpole <: AbstractEnv
     end
 end
 
+function clone(s::Cartpole)
+    return Cartpole(
+        s.episode_length;
+        render=s.renderize
+    )
+end
+
 function step!(env::Cartpole, action::Int)
     act = env.actions[action]
     observation, reward, terminated, truncated, info = env.pyenv.step(act)
@@ -47,7 +54,6 @@ function renderize!(env::Cartpole)
     env.pyenv = gym.make("CartPole-v1", render_mode="human");
     env.renderize = true
 end
-
 
 # =======================... Utility functions...================================== #
 

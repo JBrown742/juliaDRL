@@ -27,7 +27,8 @@ export
     render!,
     reset!, 
     close!,
-    renderize!
+    renderize!,
+    clone
     # normalise
 
 
