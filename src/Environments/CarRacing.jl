@@ -1,5 +1,6 @@
 mutable struct CarRacing <: AbstractEnv
     episode_length::Int64
+    episode_step::Int64
     pyenv::PyObject
     state::Array{Float32}
     terminal::Bool
@@ -13,7 +14,7 @@ mutable struct CarRacing <: AbstractEnv
             pe = gym.make("CarRacing-v3", domain_randomize=true);
         end
         obs, info = pe.reset()
-        return new(len, pe, Float32.(obs) ./ 255, false, [Float32, Float32, Float32], [(-1,1), (0,1), (0,1)], render)
+        return new(len, 0, pe, Float32.(obs) ./ 255, false, [Float32, Float32, Float32], [(-1,1), (0,1), (0,1)], render)
     end
 end
 
@@ -30,7 +31,13 @@ function step!(env::CarRacing, action::Vector{Float32})
     observation, reward, terminated, truncated, info = env.pyenv.step(scaled_actions)
     env.state = observation
     env.terminal = terminated
-    return Float32.(observation) ./ 255, reward, terminated || truncated
+    env.episode_step += 1
+    if env.episode_step == env.episode_length
+        term = true
+    else
+        term = terminated || truncated
+    end
+    return Float32.(observation) ./ 255, reward, term
 end
 
 
@@ -45,6 +52,7 @@ function reset!(env::CarRacing)
 
     env.state = observation
     env.terminal = false
+    env.episode_step = 0
     return Float32.(env.state) ./ 255
 end
 

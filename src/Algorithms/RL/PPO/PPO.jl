@@ -156,11 +156,11 @@ end
 function gradient_calculation_and_update!(alg::PPO{MultiContinuousAct}, agent::StandardActorCritic, states::Vector{AbstractObservation}, 
     actions::Vector{MultiContinuousAct}, batch_advantages::Vector{Float32}, batch_probabilities::Vector{Float32}, 
     batch_bellman_targets::Vector{Float32})
+    state_mat = cat(states..., dims=4)
     ∇_actor = Flux.gradient(agent.actor_model.model) do m # track gradients
-        @info typeof(states)
-        μ, log_σ = m(states)
+        μ, log_σ = m(state_mat)
         σ = exp.(log_σ)
-        new_log_probs = log_gauss_pdf(actions, μ, σ)
+        new_log_probs = log_gauss_pdf_multi(actions, μ, σ)
         old_log_probs = batch_probabilities
         r = exp.(new_log_probs .- old_log_probs)
         clamped_r = clamp.(r, 1 - alg.ϵ, 1 + alg.ϵ)
@@ -171,7 +171,7 @@ function gradient_calculation_and_update!(alg::PPO{MultiContinuousAct}, agent::S
     end
     Flux.update!(agent.actor_model._optimizer_state, agent.actor_model.model, ∇_actor[1])
     ∇_critic = Flux.gradient(agent.critic_model.model) do m # track gradients
-        state_values = dropdims(m(states), dims=1)
+        state_values = dropdims(m(state_mat), dims=1)
         Flux.Losses.mse(batch_bellman_targets, state_values)
     end
     Flux.update!(agent.critic_model._optimizer_state, agent.critic_model.model, ∇_critic[1])
@@ -258,6 +258,7 @@ function validation_episode!(alg::PPO{G}, env::E, agent::A; render::Bool=false) 
     step=0
     while env.terminal == false # bool flag to denote whether routing has finished
         # calculate the mode outputs based on the current graph
+
         action, value, probs = get_action(typeof(alg), agent, state; det=true)
         if render==true
             sleep(0.005)
@@ -266,7 +267,7 @@ function validation_episode!(alg::PPO{G}, env::E, agent::A; render::Bool=false) 
         state, reward, term = step!(env, action)
         push!(episode_reward, reward)
         step+=1
-        if step==10000 || term
+        if step==200 || term
             env.terminal = true
         end
     end

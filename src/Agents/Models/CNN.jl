@@ -32,21 +32,23 @@ end
 Functors.@functor CNN
 
 function save_model(CNN_model::CNN, save_dir::String; model_info::String="")
+    if !isdir(save_dir)
+        mkdir(save_dir)
+    end
     num_saved_models = length(readdir(save_dir))
     model = CNN_model.model
     if model_info==""
         @save save_dir * "/model_$(num_saved_models+1).bson" model
     else
-        @save save_dir * "/model_" * model_info * ".bson" model
+        @save save_dir * "/" * model_info * "_model.bson" model
     end
 end
 
-function load_model(v::Type{CNN}, load_path::String)
+function load_model(::Type{CNN}, load_path::String)
     @load load_path model
     CNN_model = CNN(model)
     return CNN_model
 end
-
 
 
 

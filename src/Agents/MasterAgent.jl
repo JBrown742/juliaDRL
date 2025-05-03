@@ -51,14 +51,14 @@ function save_agent(A::CombinedActorCritic, save_dir::String; agent_info::String
     save_model(combined_model, agent_save_dir; model_info="combined")
 end
 
-function load_agent(::Type{StandardActorCritic}, agent_dir::String)
-    actor = load_model(DNN, agent_dir * "/actor_model.bson")
-    critic = load_model(DNN, agent_dir * "/critic_model.bson")
+function load_agent(::Type{StandardActorCritic}, ::Type{M}, agent_dir::String) where {M <: AbstractModel}
+    actor = load_model(M, agent_dir * "/actor_model.bson")
+    critic = load_model(M, agent_dir * "/critic_model.bson")
     return StandardActorCritic(actor, critic)
 end
 
-function load_agent(::Type{CombinedActorCritic}, agent_dir::String)
-    combined = load_model(DNN, agent_dir * "/combined_model.bson")
+function load_agent(::Type{CombinedActorCritic}, ::Type{M}, agent_dir::String) where {M <: AbstractModel}
+    combined = load_model(M, agent_dir * "/combined_model.bson")
     return CombinedActorCritic(combined)
 end
 
@@ -74,8 +74,8 @@ const AbstractObservation = Union{VectorObs, MatrixObs, ArrayObs, GraphObs}
 
 const DiscreteAct = Int
 const ContinuousAct = Float32
-const MultiDiscreteAct = Vector{Int}
-const MultiContinuousAct = Union{Vector{Float32}, Vector{Float64}}
+const MultiDiscreteAct = Union{Vector{DiscreteAct}}
+const MultiContinuousAct = Union{Vector{ContinuousAct}}
 
 const AbstractAction = Union{DiscreteAct, ContinuousAct, MultiDiscreteAct, MultiContinuousAct}
 

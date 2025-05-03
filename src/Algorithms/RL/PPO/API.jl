@@ -76,7 +76,7 @@ function visualise_learning(alg::PPO, env::E, test_dir::String) where {E <: Abst
     println(agent_list[ordered_indices])
     for ag in agent_list[ordered_indices]
         iter = split(split(ag, "_")[end], ".")[1]
-        agent = load_agent(typeof(alg.central_agent), checkpoint_dir * "/" * ag)
+        agent = load_agent(typeof(alg.central_agent), typeof(alg.central_agent.actor_model), checkpoint_dir * "/" * ag)
         println("Model checkpointed at $(iter)")
         R = validation_episode!(alg, env, agent)
         println("Achieved reward = $(R)")
