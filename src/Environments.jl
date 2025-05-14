@@ -22,6 +22,8 @@ export
     Cartpole,
     Pendulum,
     CarRacing,
+    BipedalWalker,
+    ParticleChase,
 
     step!,
     render!,
@@ -36,5 +38,7 @@ include("./Environments/MasterEnv.jl")
 include("./Environments/Cartpole.jl")
 include("./Environments/Pendulum.jl")
 include("./Environments/CarRacing.jl")
+include("./Environments/BipedalWalker.jl")
+include("./Environments/ParticleChase.jl")
 
 end # module Models

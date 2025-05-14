@@ -39,7 +39,7 @@ alg = PPO(DiscreteAct, 4, 512, 10, agent, 32, 0.9, 0.95, 0.2, 0.7, 0.0, 5)
 
 # ------------------------------------------------------- #
 # alg = ContinuousPPO(4, 512, 10, agent, 128, 0.9, 0.95, 0.2, 0.6, 0.0, 5)
-learn(env, alg; training_iters=100, test_name="PPOTest")
+learn(env, alg; training_iters=100, test_name="PPOTest02")
 close!(env)
 fill(deepcopy(env), alg.N)
 

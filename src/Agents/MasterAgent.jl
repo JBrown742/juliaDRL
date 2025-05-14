@@ -4,10 +4,21 @@ abstract type AbstractAgent end
 mutable struct StandardActorCritic <: AbstractAgent
     actor_model::AbstractModel
     critic_model::AbstractModel
+    model_type::Type
+    function StandardActorCritic(actor::AbstractModel, critic::AbstractModel)
+        return new(actor, critic, typeof(actor))
+    end
 end
+
 mutable struct CombinedActorCritic <: AbstractAgent
     combined_model::AbstractModel
+    model_type::Type
+    function CombinedActorCritic(m::AbstractModel)
+        return new(m, typeof(m))
+    end
 end
+
+
 mutable struct StandardPolicy <: AbstractAgent
     model::AbstractModel
 end

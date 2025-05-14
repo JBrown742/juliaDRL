@@ -58,6 +58,8 @@ export
     Cartpole,
     Pendulum,
     CarRacing,
+    BipedalWalker,
+    ParticleChase,
 
     step!,
     render!,

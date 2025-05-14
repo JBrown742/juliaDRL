@@ -13,9 +13,9 @@ end
 function (m::DNN)(state::VectorObs)
     outputs = m.model(reshape(state, (length(state), 1)))
     if typeof(outputs) <: Tuple
-        return dropdims.(outputs, dims=2)
+        return outputs
     else
-        return dropdims(outputs, dims=2)
+        return outputs
     end
 end
 function (m::DNN)(state::Vector{O}) where {O <: AbstractObservation}

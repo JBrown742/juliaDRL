@@ -68,7 +68,7 @@ function learn(env::E, alg::PPO;
     end
 end
 
-function visualise_learning(alg::PPO, env::E, test_dir::String) where {E <: AbstractEnv}
+function visualise_learning(alg::PPO{G}, env::E, test_dir::String) where {E <: AbstractEnv, G <: AbstractAction}
     checkpoint_dir = test_dir*"/"*"checkpointed_agents"
     agent_list = readdir(checkpoint_dir)
     ordered_indices = sortperm(parse.(Int, first.(split.(last.(split.(agent_list, "_")), "."))))
@@ -76,9 +76,9 @@ function visualise_learning(alg::PPO, env::E, test_dir::String) where {E <: Abst
     println(agent_list[ordered_indices])
     for ag in agent_list[ordered_indices]
         iter = split(split(ag, "_")[end], ".")[1]
-        agent = load_agent(typeof(alg.central_agent), typeof(alg.central_agent.actor_model), checkpoint_dir * "/" * ag)
+        agent = load_agent(typeof(alg.central_agent), alg.central_agent.model_type, checkpoint_dir * "/" * ag)
         println("Model checkpointed at $(iter)")
-        R = validation_episode!(alg, env, agent)
+        R = validation_episode!(alg, env, agent; render=true)
         println("Achieved reward = $(R)")
     end
     close!(env)

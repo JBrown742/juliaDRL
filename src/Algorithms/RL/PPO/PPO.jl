@@ -156,7 +156,8 @@ end
 function gradient_calculation_and_update!(alg::PPO{MultiContinuousAct}, agent::StandardActorCritic, states::Vector{AbstractObservation}, 
     actions::Vector{MultiContinuousAct}, batch_advantages::Vector{Float32}, batch_probabilities::Vector{Float32}, 
     batch_bellman_targets::Vector{Float32})
-    state_mat = cat(states..., dims=4)
+    state_dim = ndims(states[1])
+    state_mat = cat(states..., dims=state_dim+1)
     ∇_actor = Flux.gradient(agent.actor_model.model) do m # track gradients
         μ, log_σ = m(state_mat)
         σ = exp.(log_σ)
@@ -177,8 +178,27 @@ function gradient_calculation_and_update!(alg::PPO{MultiContinuousAct}, agent::S
     Flux.update!(agent.critic_model._optimizer_state, agent.critic_model.model, ∇_critic[1])
 end
 
+function gradient_calculation_and_update!(alg::PPO{MultiContinuousAct}, agent::CombinedActorCritic, states::Vector{AbstractObservation}, 
+    actions::Vector{MultiContinuousAct}, batch_advantages::Vector{Float32}, batch_probabilities::Vector{Float32}, 
+    batch_bellman_targets::Vector{Float32})
+    state_dim = ndims(states[1])
+    state_mat = cat(states..., dims=state_dim+1)
+    ∇ = Flux.gradient(agent.combined_model.model) do m # track gradients
+        μ, log_σ, state_values = m(state_mat)
+        σ = exp.(log_σ)
+        new_log_probs = log_gauss_pdf_multi(actions, μ, σ)
+        old_log_probs = batch_probabilities
+        r = exp.(new_log_probs .- old_log_probs)
+        clamped_r = clamp.(r, 1 - alg.ϵ, 1 + alg.ϵ)
+        vals = minimum.(batch_advantages .* clamped_r)
+        L_CLIP = 1 * mean(vals)
+        L_value_loss = Flux.Losses.mse(batch_bellman_targets, dropdims(state_values, dims=1))
 
-
+        # entropy = 0.5 .* log.(2 * π .* σ .^ 2 .+ 0.5) # there is a closed form for the entropy of a gaussian
+        alg.c1 * L_value_loss - L_CLIP
+    end
+    Flux.update!(agent.combined_model._optimizer_state, agent.combined_model.model, ∇[1])
+end
 
 function collect_trajectory_segment!(env::E, agent::A, info::Dict{Symbol, Any}) where {E <: AbstractEnv, A <: AbstractAgent}
     T::Int = info[:T]
@@ -192,10 +212,10 @@ function collect_trajectory_segment!(env::E, agent::A, info::Dict{Symbol, Any}) 
     all_errors = Vector{Float32}()
     all_advantages = Vector{Float32}()
     if algtype <: PPO{DiscreteAct}
-            trajectory_probabilities = Vector{Vector{Float32}}()
-        else
-            trajectory_probabilities = Vector{Float32}()
-        end
+        trajectory_probabilities = Vector{Vector{Float32}}()
+    else
+        trajectory_probabilities = Vector{Float32}()
+    end
     # When starting a new segment collection we need to decide whether to continue with a current episode or start a-new
 
     while local_segment_count < T # while we still haven't fully collected a segment
@@ -203,16 +223,16 @@ function collect_trajectory_segment!(env::E, agent::A, info::Dict{Symbol, Any}) 
         current_ep_trajectory = Vector{Experience}() 
         local_targets = Vector{Float32}()
         local_errors = Vector{Float32}()
-            if env.terminal
+        if env.terminal
             state = reset!(env)
         else
             state = env.state
         end
-            while env.terminal == false && local_segment_count < T # bool flag to denote whether episode has finished
+        while env.terminal == false && local_segment_count < T # bool flag to denote whether episode has finished
             # Generalises below...
-                    action, state_value, probs = get_action(algtype, agent, env) # get the action, the value and the probability
+            action, state_value, probs = get_action(algtype, agent, env) # get the action, the value and the probability
             push!(trajectory_probabilities, probs)
-                    new_state, reward, terminal = step!(env, action) # take a step of the hopper envs
+            new_state, reward, terminal = step!(env, action) # take a step of the hopper envs
             experience = Experience(state, action, new_state, reward, terminal)
             push!(current_ep_trajectory, experience)
             _, next_state_value, _ = get_action(algtype, agent, env) # get the value of the next state to calculate bellman error & advantage
@@ -258,7 +278,6 @@ function validation_episode!(alg::PPO{G}, env::E, agent::A; render::Bool=false) 
     step=0
     while env.terminal == false # bool flag to denote whether routing has finished
         # calculate the mode outputs based on the current graph
-
         action, value, probs = get_action(typeof(alg), agent, state; det=true)
         if render==true
             sleep(0.005)
@@ -267,7 +286,7 @@ function validation_episode!(alg::PPO{G}, env::E, agent::A; render::Bool=false) 
         state, reward, term = step!(env, action)
         push!(episode_reward, reward)
         step+=1
-        if step==200 || term
+        if step==10000 || term
             env.terminal = true
         end
     end
