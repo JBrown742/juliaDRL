@@ -6,27 +6,37 @@ mutable struct PPO{G <: AbstractAction} <: AbstractAlgorithm
     central_agent::Union{StandardActorCritic, CombinedActorCritic} # this holds the single central agent
     # actor learners will be defined by takingn the model from the central agent, and the policies from the list of policies
     worker_agents::Union{Vector{StandardActorCritic}, Vector{CombinedActorCritic}}
+    policy_params::Float32 # in the continuous action case this will be the \sigma to be use and in discrete it will be temperature
     #parameters
-    batch_size::Int
-    γ::Float32
-    λ::Float32
-    ϵ::Float32
-    c1::Float32
-    c2::Float32
-    sync_frequency::Int
-    advantage_coefficients::Vector{Float32}
-    function PPO(::Type{G}, N::Int, T::Int, K::Int, agent::A, batch_size::Int, γ::Float64, λ::Float64, 
+    batch_size::Int # number of samples to use per learning update
+    γ::Float32 # Discount factor
+    λ::Float32 # GAE lambda
+    ϵ::Float32 # the epsilon used in the clipped policy objective to ensure policy remains in trust region
+    c1::Float32 # Used in CombinedActorCritic architectures to weight the value loss relative to CLIP surrogate objective
+    c2::Float32 # to weight the entropy objective relative to the clipped objective
+    sync_frequency::Int # the number of learning interations to carry out between each synchronisation from central model to workers
+    advantage_coefficients::Vector{Float32} # Holds advantage coefficients for the algorithm.
+    # debug variables
+    average_policy_loss::Vector{Float32}
+    average_value_loss::Vector{Float32}
+    average_entropy_loss::Vector{Float32}
+    clipfrac::Vector{Float32}
+    approxkl::Vector{Float32}
+    average_gradient_norm::Vector{Float32}
+    function PPO(::Type{G}, N::Int, T::Int, K::Int, agent::A, policy_param::Float32, batch_size::Int, γ::Float64, λ::Float64, 
         ϵ::Float64, c1::Float64, c2::Float64, sync_frequency::Int) where {G <: AbstractAction, A <: AbstractAgent}
         wrkrs = [deepcopy(agent) for _ in 1:N]
-        exponents = collect(0:T*100)
+        exponents = collect(0:T)
         advantage_coefficients = (λ * γ) .^ exponents
-        return new{G}(N, T, K, agent, wrkrs, batch_size, γ, λ, ϵ, c1, c2, sync_frequency, advantage_coefficients)
+        return new{G}(N, T, K, agent, wrkrs, policy_param, batch_size, γ, λ, ϵ, c1, c2, sync_frequency, advantage_coefficients,
+        Vector{Float32}(), Vector{Float32}(), Vector{Float32}(), Vector{Float32}(), Vector{Float32}(), Vector{Float32}())
     end
     function PPO(::Type{G}, N::Int, T::Int, K::Int,  agent::A) where {G <: AbstractAction, A <: AbstractAgent}
         wrkrs = [deepcopy(agent) for _ in 1:N]
-        exponents = collect(0:T*100)
+        exponents = collect(0:T)
         advantage_coefficients = (0.95 * 0.99) .^ exponents
-        return new{G}(N, T, K, agent, wrkrs, 64, 0.99, 0.95, 0.2, 0.5, 0.001, 2, advantage_coefficients)
+        return new{G}(N, T, K, agent, wrkrs, 0.2f0, 64, 0.99, 0.95, 0.2, 0.5, 0.001, 2, advantage_coefficients,
+        Vector{Float32}(), Vector{Float32}(), Vector{Float32}(), Vector{Float32}(), Vector{Float32}(), Vector{Float32}())
     end
 
 end
@@ -56,6 +66,7 @@ function train!(alg::PPO{G}, transitions::Vector{Experience}, probabilities::Uni
             push!(actions, experience.action)
         end
         batch_probabilities = probabilities[batch_indices]
+        # Normalize the advantages over the current batch?
         batch_advantages = (advantages[batch_indices] .- mean(advantages[batch_indices])) ./ std(advantages[batch_indices])
         batch_bellman_targets = bellman_targets[batch_indices]
         gradient_calculation_and_update!(alg, alg.central_agent, states, actions, batch_advantages, batch_probabilities, batch_bellman_targets)
@@ -158,23 +169,31 @@ function gradient_calculation_and_update!(alg::PPO{MultiContinuousAct}, agent::S
     batch_bellman_targets::Vector{Float32})
     state_dim = ndims(states[1])
     state_mat = cat(states..., dims=state_dim+1)
-    ∇_actor = Flux.gradient(agent.actor_model.model) do m # track gradients
-        μ, log_σ = m(state_mat)
-        σ = exp.(log_σ)
-        new_log_probs = log_gauss_pdf_multi(actions, μ, σ)
+    info, ∇_actor = Flux.withgradient(agent.actor_model.model) do m # track gradients
+        μ = m(state_mat)
+        # σ = exp.(log_σ)
+        new_log_probs = log_gauss_pdf_multi(actions, μ, fill(0.2f0, size(μ)))
         old_log_probs = batch_probabilities
         r = exp.(new_log_probs .- old_log_probs)
         clamped_r = clamp.(r, 1 - alg.ϵ, 1 + alg.ϵ)
         vals = minimum.(batch_advantages .* clamped_r)
         L_CLIP = 1 * mean(vals)
-        # entropy = 0.5 .* log.(2 * π .* σ .^ 2 .+ 0.5) # there is a closed form for the entropy of a gaussian
-        -1 * L_CLIP
+        # entropy = mean(0.5 .* log.(2 * π .* 0.1f0 .^ 2 .+ 0.5)) # there is a closed form for the entropy of a gaussian
+        l = -1 * L_CLIP 
+        # - alg.c2 * entropy
+        return -1 * L_CLIP, -1 * mean(log.(r)), sum(Int.(clamped_r .== r)) / length(r), 0
     end
+    push!(alg.average_policy_loss, info[1])
+    push!(alg.approxkl, info[2])
+    push!(alg.clipfrac, info[3])
+    push!(alg.average_entropy_loss, info[4])
     Flux.update!(agent.actor_model._optimizer_state, agent.actor_model.model, ∇_actor[1])
-    ∇_critic = Flux.gradient(agent.critic_model.model) do m # track gradients
+    vall_loss, ∇_critic = Flux.withgradient(agent.critic_model.model) do m # track gradients
         state_values = dropdims(m(state_mat), dims=1)
-        Flux.Losses.mse(batch_bellman_targets, state_values)
+        val_loss = Flux.Losses.mse(batch_bellman_targets, state_values)
+        return val_loss
     end
+    push!(alg.average_value_loss, vall_loss)
     Flux.update!(agent.critic_model._optimizer_state, agent.critic_model.model, ∇_critic[1])
 end
 
@@ -194,8 +213,8 @@ function gradient_calculation_and_update!(alg::PPO{MultiContinuousAct}, agent::C
         L_CLIP = 1 * mean(vals)
         L_value_loss = Flux.Losses.mse(batch_bellman_targets, dropdims(state_values, dims=1))
 
-        # entropy = 0.5 .* log.(2 * π .* σ .^ 2 .+ 0.5) # there is a closed form for the entropy of a gaussian
-        alg.c1 * L_value_loss - L_CLIP
+        entropy = 0.5 .* log.(2 * π .* σ .^ 2 .+ 0.5) # there is a closed form for the entropy of a gaussian
+        alg.c1 * L_value_loss - L_CLIP  - alg.c2 *entropy
     end
     Flux.update!(agent.combined_model._optimizer_state, agent.combined_model.model, ∇[1])
 end
@@ -280,7 +299,7 @@ function validation_episode!(alg::PPO{G}, env::E, agent::A; render::Bool=false) 
         # calculate the mode outputs based on the current graph
         action, value, probs = get_action(typeof(alg), agent, state; det=true)
         if render==true
-            sleep(0.005)
+            # sleep(0.005)
             render!(env)
         end
         state, reward, term = step!(env, action)

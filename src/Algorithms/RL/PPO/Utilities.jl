@@ -69,17 +69,16 @@ end
 ## ------------------------------- Multicontinuous Actions ---------------------------- ##
 function get_action(::Type{PPO{MultiContinuousAct}}, agent::StandardActorCritic, obs::O; det=false) where {O <: AbstractObservation}
     # Need to decide here how we expect 
-    μ_vec, log_σ_vec = dropdims.(agent.actor_model(obs), dims=2) # dropdims here so that each is a vector. This function will be called exclusively by a single agent
+    μ_vec = dropdims(agent.actor_model(obs), dims=2) # dropdims here so that each is a vector. This function will be called exclusively by a single agent
     value = agent.critic_model(obs)
-    σ_vec = exp.(log_σ_vec)
+    # σ_vec = exp.(log_σ_vec)
     if det == true
-        d_vec = [Normal(Float64.(μ), 0.01) for (μ, σ) in zip(μ_vec, σ_vec)]
-        action_vec = Float32.(rand.(d_vec))
+        action_vec = μ_vec
     else
-        d_vec = [Normal(Float64.(μ), Float64.(σ)) for (μ, σ) in zip(μ_vec, σ_vec)]
+        d_vec = [Normal(Float64.(μ), Float64.(0.2f0)) for μ in μ_vec]
         action_vec = Float32.(rand.(d_vec))
     end
-    return action_vec, value[1], log_gauss_pdf_multi(action_vec, μ_vec, σ_vec)
+    return action_vec, value[1], log_gauss_pdf_multi(action_vec, μ_vec, fill(0.2f0, length(μ_vec)))
 end
 
 function get_action(::Type{PPO{MultiContinuousAct}}, agent::CombinedActorCritic, obs::O; det=false) where {O <: AbstractObservation}

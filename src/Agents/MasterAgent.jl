@@ -18,7 +18,6 @@ mutable struct CombinedActorCritic <: AbstractAgent
     end
 end
 
-
 mutable struct StandardPolicy <: AbstractAgent
     model::AbstractModel
 end

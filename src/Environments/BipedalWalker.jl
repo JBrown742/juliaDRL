@@ -10,9 +10,9 @@ mutable struct BipedalWalker <: AbstractEnv
     renderize::Bool
     function BipedalWalker(len::Int; render::Bool=false)
         if render
-            pe = gym.make("BipedalWalker-v3", hardcore=true, render_mode="human");
+            pe = gym.make("BipedalWalker-v3", render_mode="human");
         else            
-            pe = gym.make("BipedalWalker-v3", hardcore=true);
+            pe = gym.make("BipedalWalker-v3");
         end
         state, info = pe.reset()
         highs = Float32.(pe.unwrapped.observation_space.high)
@@ -31,8 +31,7 @@ function clone(s::BipedalWalker)
 end
 
 function step!(env::BipedalWalker, action::Vector{Float32})
-    scaled_actions = 2f0 .* action .- 1f0
-    clipped_action = clamp.(scaled_actions, -1f0, 1f0)
+    clipped_action = clamp.(action, -1f0, 1f0)
     s, reward, terminated, truncated, info = env.pyenv.step(clipped_action)
     observation = process_state(env, s)
     env.state = observation
@@ -65,10 +64,10 @@ function close!(env::BipedalWalker)
 end
 
 function renderize!(env::BipedalWalker)
-    env.pyenv = gym.make("BipedalWalker-v3", hardcore=true, render_mode="human");
+    env.pyenv = gym.make("BipedalWalker-v3", render_mode="human");
     env.renderize = true
 end
 
 function process_state(env::BipedalWalker, state::Vector{Float32})
-    return 2 .* ((state .- env.observation_lows) ./ (env.observation_highs .- env.observation_lows)) .- 1
+    return (state .- mean(state)) ./ std(state)
 end
