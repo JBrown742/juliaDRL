@@ -8,9 +8,8 @@ function get_action(::Type{PPO{DiscreteAct}}, agent::CombinedActorCritic, obs::O
         mask = ones(length(outputs))
     end
     masked_outputs = outputs .+ mask
-    ws = Float32.(softmax(masked_outputs; dims = 1))
-    indices = collect(1:length(
-        funws))
+    ws = dropdims(Float32.(softmax(masked_outputs; dims = 1)), dims=2)
+    indices = collect(1:length(ws))
     if det == true
         action = argmax(ws)
     else
@@ -27,7 +26,7 @@ function get_action(::Type{PPO{DiscreteAct}}, agent::StandardActorCritic, obs::O
         mask = ones(length(outputs))
     end
     masked_outputs = outputs .+ mask
-    ws = Float32.(softmax(masked_outputs; dims = 1))
+    ws = dropdims(Float32.(softmax(masked_outputs; dims = 1)), dims=2)
     indices = collect(1:length(ws))
     if det == true
         action = argmax(ws)
@@ -69,16 +68,16 @@ end
 ## ------------------------------- Multicontinuous Actions ---------------------------- ##
 function get_action(::Type{PPO{MultiContinuousAct}}, agent::StandardActorCritic, obs::O; det=false) where {O <: AbstractObservation}
     # Need to decide here how we expect 
-    μ_vec = dropdims(agent.actor_model(obs), dims=2) # dropdims here so that each is a vector. This function will be called exclusively by a single agent
+    μ_vec, log_σ_vec = dropdims.(agent.actor_model(obs), dims=2) # dropdims here so that each is a vector. This function will be called exclusively by a single agent
     value = agent.critic_model(obs)
-    # σ_vec = exp.(log_σ_vec)
+    σ_vec = exp.(log_σ_vec)
     if det == true
         action_vec = μ_vec
     else
-        d_vec = [Normal(Float64.(μ), Float64.(0.2f0)) for μ in μ_vec]
+        d_vec = [Normal(Float64.(μ), Float64.(σ)) for (μ, σ) in zip(μ_vec, σ_vec)]
         action_vec = Float32.(rand.(d_vec))
     end
-    return action_vec, value[1], log_gauss_pdf_multi(action_vec, μ_vec, fill(0.2f0, length(μ_vec)))
+    return action_vec, value[1], log_gauss_pdf_multi(action_vec, μ_vec, σ_vec)
 end
 
 function get_action(::Type{PPO{MultiContinuousAct}}, agent::CombinedActorCritic, obs::O; det=false) where {O <: AbstractObservation}
@@ -163,22 +162,55 @@ end
 
 
 function update_actor_learners!(agent::CombinedActorCritic, alg::PPO{G}) where {G <: AbstractAction}
-    for (idx,p) in enumerate(Flux.params(agent.combined_model.model))
-        for agent_idx in 1:alg.N
-            Flux.params(alg.worker_agents[agent_idx].combined_model.model)[idx] .= copy(p |> cpu)
+    cpu_combined_model = agent.combined_model.model |> cpu
+    for (idx,l) in enumerate(Flux.trainable(cpu_combined_model).layers)
+        if typeof(l) <: Split
+            for (i, path) in enumerate(l.paths)
+                for agent_idx in 1:alg.N
+                    Flux.trainable(alg.worker_agents[agent_idx].combined_model.model).layers[idx].paths[i].weight .= copy(path.weight)
+                    Flux.trainable(alg.worker_agents[agent_idx].combined_model.model).layers[idx].paths[i].bias .= copy(path.bias)
+                end
+            end
+        else
+            for agent_idx in 1:alg.N
+                Flux.trainable(alg.worker_agents[agent_idx].combined_model.model).layers[idx].weight .= copy(l.weight)
+                Flux.trainable(alg.worker_agents[agent_idx].combined_model.model).layers[idx].bias .= copy(l.bias)
+            end
         end
     end
 end
 
-function update_actor_learners!(agent::StandardActorCritic, alg::PPO{G}) where {G <: AbstractAction}
-    for (idx,p) in enumerate(Flux.params(agent.actor_model.model))
-        for agent_idx in 1:alg.N
-            Flux.params(alg.worker_agents[agent_idx].actor_model.model)[idx] .= copy(p |> cpu)
+function update_actor_learners!(agent::StandardActorCritic, alg::PPO{G}) where {G <: AbstractAction} # Can we make this a function that is implemented on each worker?
+    cpu_actor_model = agent.actor_model.model |> cpu
+    cpu_critic_model = agent.critic_model.model |> cpu
+    for (idx,l) in enumerate(Flux.trainable(cpu_actor_model).layers)
+        if typeof(l) <: Split
+            for (i, path) in enumerate(l.paths)
+                for agent_idx in 1:alg.N
+                    Flux.trainable(alg.worker_agents[agent_idx].actor_model.model).layers[idx].paths[i].weight .= copy(path.weight)
+                    Flux.trainable(alg.worker_agents[agent_idx].actor_model.model).layers[idx].paths[i].bias .= copy(path.bias)
+                end
+            end
+        else
+            for agent_idx in 1:alg.N
+                Flux.trainable(alg.worker_agents[agent_idx].actor_model.model).layers[idx].weight .= copy(l.weight)
+                Flux.trainable(alg.worker_agents[agent_idx].actor_model.model).layers[idx].bias .= copy(l.bias)
+            end
         end
     end
-    for (idx,p) in enumerate(Flux.params(agent.critic_model.model))
-        for agent_idx in 1:alg.N
-            Flux.params(alg.worker_agents[agent_idx].critic_model.model)[idx] .= copy(p |> cpu)
+    for (idx,l) in enumerate(Flux.trainable(cpu_critic_model).layers)
+        if typeof(l) <: Split
+            for (i, path) in enumerate(l.paths)
+                for agent_idx in 1:alg.N
+                    Flux.trainable(alg.worker_agents[agent_idx].critic_model.model).layers[idx].paths[i].weight .= copy(path.weight)
+                    Flux.trainable(alg.worker_agents[agent_idx].critic_model.model).layers[idx].paths[i].bias .= copy(path.bias)
+                end
+            end
+        else
+            for agent_idx in 1:alg.N
+                Flux.trainable(alg.worker_agents[agent_idx].critic_model.model).layers[idx].weight .= copy(l.weight)
+                Flux.trainable(alg.worker_agents[agent_idx].critic_model.model).layers[idx].bias .= copy(l.bias)
+            end
         end
     end
 end

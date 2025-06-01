@@ -84,8 +84,8 @@ const AbstractObservation = Union{VectorObs, MatrixObs, ArrayObs, GraphObs}
 
 const DiscreteAct = Int
 const ContinuousAct = Float32
-const MultiDiscreteAct = Union{Vector{DiscreteAct}}
-const MultiContinuousAct = Union{Vector{ContinuousAct}}
+const MultiDiscreteAct = Vector{DiscreteAct}
+const MultiContinuousAct = Vector{ContinuousAct}
 
 const AbstractAction = Union{DiscreteAct, ContinuousAct, MultiDiscreteAct, MultiContinuousAct}
 

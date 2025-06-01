@@ -1,6 +1,6 @@
 module Algorithms
 
-using Base: rand
+using Base: rand, SizeUnknown
 using StatsBase
 using Distributions
 using Distributed
@@ -8,19 +8,18 @@ using NNlib
 using LinearAlgebra
 using Flux
 using Shuffle
-using CUDA
 using Plots # used for API function
 using JSON # used for API function
 using Random
 using Distributions
+using Serialization
 
-using ..juliaDRL: AbstractAgent, StandardActorCritic, CombinedActorCritic, 
-StandardPolicy, StandardValue,
-AbstractModel, AbstractEnv,
-step!, render!, reset!, close!, renderize!, clone,
-Cartpole, Pendulum, 
-save_agent, load_agent,
-AbstractObservation, AbstractAction, DiscreteAct, ContinuousAct, MultiContinuousAct, MultiDiscreteAct
+
+using ..juliaDRL.Environments
+using ..juliaDRL.Agents
+
+
+
 
 export
     AbstractExperience, 

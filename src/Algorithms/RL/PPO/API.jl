@@ -1,7 +1,8 @@
 function learn(env::E, alg::PPO; 
     training_iters = 1000,
     checkpoint_freq=1, vals_per_checkpoint=10, 
-    save_dir=pwd(), test_name="test"
+    save_dir=pwd(), test_name="test", average_window=2,
+    plot_type="max_min"
 ) where {E <: AbstractEnv}
     info_dict = Dict{String, Any}(
         "Agent" => repr(alg.central_agent), 
@@ -11,7 +12,7 @@ function learn(env::E, alg::PPO;
             "λ" => alg.λ, "ϵ" => alg.ϵ, "γ" => alg.γ, 
             "c1" => alg.c1, "c2" => alg.c2
             ), 
-        "Environment" => repr(env), 
+        # "Environment" => repr(env), 
         "training_iters" => training_iters,
         "checkpoint_freq" => checkpoint_freq, 
         "vals_per_checkpoint" => vals_per_checkpoint
@@ -28,18 +29,26 @@ function learn(env::E, alg::PPO;
         rm(agent_dir, recursive=true)
     end
     mkdir(agent_dir)
-    reward_history = Vector{Float64}()
+    reward_history = Vector{Float32}()
     best_reward = -1e6
     best_agent = deepcopy(alg.central_agent)
     reset!(env)
     vizenv = deepcopy(env)
     renderize!(vizenv)
-    envs = [clone(env) for _ in 1:alg.N] # WE NOW NEED ALL ENVIRONMENTS TO IMPLEMET THE CLONE FUNCTION!!!!!!!!!!!!!!
+    @sync for p in workers()
+       @spawnat p distribute_worker_envs(env)
+    end
     # execute several learning episodes to fill the buffer
     # then repeat for the number of training iterations
+    # initially fill the buffer 
+    trajectories = get_trajectories!(alg, env)
     for i in 1:training_iters 
-
-        full_training_procedure!(alg, envs)
+        # asynchronously launch training
+        training_future = @async train!(alg, trajectories...)        
+        # while master is training set workers off collctiong trajectories
+        collection_future = @async get_trajectories!(alg, env)
+        # wait for training to finish
+        # update trajectories
         if i % checkpoint_freq == 0
             reward_av = mean([validation_episode!(env, alg) for _ in 1:vals_per_checkpoint])
             if reward_av > best_reward
@@ -54,12 +63,31 @@ function learn(env::E, alg::PPO;
         if i % alg.sync_frequency == 0
             update_actor_learners!(alg.central_agent, alg)
         end
+        wait(training_future)
+        trajectories = fetch(collection_future)
     end
     close!(vizenv)
     save_agent(best_agent, save_dir; agent_info="best")
-    plot(reward_history, title="average return for checkpointed agents", linesize=2, legend=false);
+    # get running average_reward
+    running_av = Vector{Float32}()
+    running_std = Vector{Float32}()
+    running_max = Vector{Float32}()
+    running_min = Vector{Float32}()
+    for (i, r) in enumerate(reward_history[1:end-average_window])
+        window = reward_history[i:i + average_window]
+        push!(running_av, mean(window))
+        push!(running_std, std(window))
+        push!(running_max, maximum(window) - mean(window))
+        push!(running_min, mean(window) - minimum(window))
+    end
+    if plot_type=="max_min"
+        plot(running_av, ribbon = (running_min, running_max), title="average return for checkpointed agents", linesize=2, legend=false);
+    elseif plot_type=="std"
+        plot(running_av, ribbon = running_std, title="average return for checkpointed agents", linesize=2, legend=false);
+    end
     xlabel!("learning iteration", fontsize=20);
-    ylabel!("avg reward", fontsize=20);
+    ylabel!("avg reward", fontsize=20)
+
     savefig(save_dir*"/learning_curve")
     info_dict["best reward"] = best_reward
     json_string = JSON.json(info_dict)

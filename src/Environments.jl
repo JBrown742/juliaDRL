@@ -11,6 +11,7 @@ using Flux
 using NNlib
 
 const gym = PyNULL()
+global environments = Dict{Type, Any}()
 function __init__()
     copy!(gym,  pyimport("gymnasium"))
 end
@@ -18,6 +19,8 @@ end
 using ..juliaDRL: AbstractObservation, AbstractAction
 export
     AbstractEnv, 
+
+    environments,
 
     Cartpole,
     Pendulum,
@@ -30,8 +33,8 @@ export
     reset!, 
     close!,
     renderize!,
-    clone
-    # normalise
+    clone,
+    distribute_worker_envs
 
 
 include("./Environments/MasterEnv.jl")

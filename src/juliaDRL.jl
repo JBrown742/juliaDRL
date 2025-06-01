@@ -55,6 +55,9 @@ using .Environments
 
 
 export
+    AbstractEnv,
+    environments,
+
     Cartpole,
     Pendulum,
     CarRacing,
@@ -67,8 +70,7 @@ export
     close!,
     renderize!,
     clone,
-
-    normalise    
+    distribute_worker_envs
        
 include("Algorithms.jl")
 using .Algorithms
