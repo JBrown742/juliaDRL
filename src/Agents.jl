@@ -2,7 +2,6 @@ module Agents
 
 # model imports go here
 using Flux
-using CUDA
 using Flux: params, Statistics
 using Distributions: Normal
 using LinearAlgebra

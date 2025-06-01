@@ -17,6 +17,13 @@ mutable struct Pendulum <: AbstractEnv
     end
 end
 
+function clone(s::Pendulum)
+    return Pendulum(
+        s.episode_length;
+        render=s.renderize
+    )
+end
+
 function step!(env::Pendulum, action::Union{Float32, Float64})
     scaled_action = clamp(2 * action, env.action_extent[1], env.action_extent[2])
     observation, reward, terminated, truncated, info = env.pyenv.step([scaled_action])

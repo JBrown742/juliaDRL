@@ -1,28 +1,43 @@
 mutable struct CarRacing <: AbstractEnv
     episode_length::Int64
+    episode_step::Int64
     pyenv::PyObject
-    state::Array{Float64}
+    state::Array{Float32}
     terminal::Bool
     action_type::Vector{Type}
     action_extent::Vector{Tuple{Float32, Float32}}
     renderize::Bool
-    function CarRacing(len::Int, pyenv::PyObject)
-        obs, info = pyenv.reset()
+    function CarRacing(len::Int; render::Bool=false)
         if render
-            pe = gym.make("CarRacing-v3", domain_randomize=true, render_mode="human");
+            pe = gym.make("CarRacing-v3", domain_randomize=false, render_mode="human");
         else            
-            pe = gym.make("CarRacing-v3", domain_randomize=true);
+            pe = gym.make("CarRacing-v3", domain_randomize=false);
         end
-        return new(len, pyenv, Float32.(obs) ./ 255, false, [Float32, Float32, Float32], [(-1,1), (0,1), (0,1)], render)
+        obs, info = pe.reset()
+        return new(len, 0, pe, Float32.(obs) ./ 255, false, [Float32, Float32, Float32], [(-1,1), (0,1), (0,1)], render)
     end
 end
 
-function step!(env::CarRacing, action::Vector{Int})
-    act = env.actions[action]
-    observation, reward, terminated, truncated, info = env.pyenv.step(act)
+function clone(s::CarRacing)
+    return CarRacing(
+        s.episode_length;
+        render=s.renderize
+    )
+end
+
+function step!(env::CarRacing, action::Vector{Float32})
+    scaled_actions = (action .* (last.(env.action_extent) .- first.(env.action_extent))) .- first.(env.action_extent)
+    clipped_actions = clamp.(scaled_actions, first.(env.action_extent), last.(env.action_extent))
+    observation, reward, terminated, truncated, info = env.pyenv.step(clipped_actions)
     env.state = observation
     env.terminal = terminated
-    return Float32.(observation) ./ 255, reward, terminated || truncated
+    env.episode_step += 1
+    if env.episode_step == env.episode_length
+        term = true
+    else
+        term = terminated || truncated
+    end
+    return Float32.(observation) ./ 255, reward, term
 end
 
 
@@ -36,6 +51,19 @@ function reset!(env::CarRacing)
     (observation, info) = env.pyenv.reset()
     env.state = observation
     env.terminal = false
-    return Float32.(observation) ./ 255
+    env.episode_step = 0
+    return Float32.(env.state) ./ 255
 end
 
+function close!(env::CarRacing)
+    env.pyenv.close()
+end
+
+function renderize!(env::CarRacing)
+    env.pyenv = gym.make("CarRacing-v3", domain_randomize=false, render_mode="human");
+    env.renderize = true
+end
+
+function process_state(env::CarRacing, state::Array{UInt8, 3})
+    return sum(env.scaler_mat .* state, dims=3)[21:80, 21:60, :]
+end
