@@ -44,7 +44,7 @@ agent = CombinedActorCritic(combined_model)
 alg = PPO(DiscreteAct, nworkers(), 128, nworkers(), agent, 128, 0.9, 0.95, 0.15, 1., 0.001, 3)
 
 # ------------------------------------------------------- #
-learn(env, alg; training_iters=100, save_dir="/home/johnny/Documents/PersonalCode/juliaDRL/test_data/Cartpole", test_name="PPO_CombinedActorCritic_1", average_window=10)
+learn(env, alg; training_iters=100, save_dir="/home/johnny/Documents/PersonalCode/juliaDRL/test_data/Cartpole", test_name="PPO_CombinedActorCritic_2", average_window=10)
 
 # For visualistaion
 vizenv = Cartpole(200, render=true)

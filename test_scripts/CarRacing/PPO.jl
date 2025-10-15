@@ -1,5 +1,10 @@
-using Revise
-using juliaDRL
+using Distributed
+if nworkers() == 1
+  addprocs(10)
+end
+
+@everywhere using Revise
+@everywhere using juliaDRL
 using Flux
 using StatsBase
 using PyCall
@@ -7,7 +12,7 @@ using Profile
 using ProfileView
 using Plots
 
-env = CarRacing(200)
+env = CarRacing(1000)
 actor_network = Chain(
   Conv((6, 6), 3 => 4, stride=3, leakyrelu), # First convolution layer                       # First max pooling layer
   Conv((3, 3), 4 => 8, stride=2, leakyrelu), # Second convolution layer  
@@ -33,9 +38,11 @@ critic_model = CNN(critic_network, critic_optim)
 
 
 agent = StandardActorCritic(actor_model, critic_model)
-alg = PPO(MultiContinuousAct, 6, 1024, 5, agent, 64, 0.99, 0.95, 0.2, 1., 0.0, 5)
+alg = PPO(MultiContinuousAct, nworkers(), 256, nworkers(), agent, 256, 0.99, 0.95, 0.2, 1., 0.001, 3)
 
-learn(env, alg; training_iters=2000, checkpoint_freq=5, test_name="juliaDRL/test_data/CarRacing/PPODemoTest2")
+nworkers()
+
+learn(env, alg; training_iters=10000, checkpoint_freq=5, test_name="test_data/CarRacing/PPODemoTest2")
 
 visualise_learning(alg, vizenv, "juliaDRL/test_data/CarRacing/PPODemoTest2")
 

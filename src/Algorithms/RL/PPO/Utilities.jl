@@ -161,59 +161,77 @@ function log_gauss_pdf_multi(x::Matrix{Float32}, μ::Matrix{Float32}, σ::Matrix
 end
 
 
+# function update_actor_learners!(agent::CombinedActorCritic, alg::PPO{G}) where {G <: AbstractAction}
+#     cpu_combined_model = agent.combined_model.model |> cpu
+#     for (idx,l) in enumerate(Flux.trainable(cpu_combined_model).layers)
+#         if typeof(l) <: Split
+#             for (i, path) in enumerate(l.paths)
+#                 for agent_idx in 1:alg.N
+#                     Flux.trainable(alg.worker_agents[agent_idx].combined_model.model).layers[idx].paths[i].weight .= copy(path.weight)
+#                     Flux.trainable(alg.worker_agents[agent_idx].combined_model.model).layers[idx].paths[i].bias .= copy(path.bias)
+#                 end
+#             end
+#         else
+#             for agent_idx in 1:alg.N
+#                 Flux.trainable(alg.worker_agents[agent_idx].combined_model.model).layers[idx].weight .= copy(l.weight)
+#                 Flux.trainable(alg.worker_agents[agent_idx].combined_model.model).layers[idx].bias .= copy(l.bias)
+#             end
+#         end
+#     end
+# end
+
 function update_actor_learners!(agent::CombinedActorCritic, alg::PPO{G}) where {G <: AbstractAction}
     cpu_combined_model = agent.combined_model.model |> cpu
-    for (idx,l) in enumerate(Flux.trainable(cpu_combined_model).layers)
-        if typeof(l) <: Split
-            for (i, path) in enumerate(l.paths)
-                for agent_idx in 1:alg.N
-                    Flux.trainable(alg.worker_agents[agent_idx].combined_model.model).layers[idx].paths[i].weight .= copy(path.weight)
-                    Flux.trainable(alg.worker_agents[agent_idx].combined_model.model).layers[idx].paths[i].bias .= copy(path.bias)
-                end
-            end
-        else
-            for agent_idx in 1:alg.N
-                Flux.trainable(alg.worker_agents[agent_idx].combined_model.model).layers[idx].weight .= copy(l.weight)
-                Flux.trainable(alg.worker_agents[agent_idx].combined_model.model).layers[idx].bias .= copy(l.bias)
-            end
-        end
+    for worker in alg.worker_agents
+        Flux.loadmodel!(worker.combined_model.model, cpu_combined_model)
     end
 end
 
-function update_actor_learners!(agent::StandardActorCritic, alg::PPO{G}) where {G <: AbstractAction} # Can we make this a function that is implemented on each worker?
+# function update_actor_learners!(agent::StandardActorCritic, alg::PPO{G}) where {G <: AbstractAction} # Can we make this a function that is implemented on each worker?
+#     cpu_actor_model = agent.actor_model.model |> cpu
+#     cpu_critic_model = agent.critic_model.model |> cpu
+#     for (idx,l) in enumerate(Flux.trainable(cpu_actor_model).layers)
+#         if typeof(l) <: Split
+#             for (i, path) in enumerate(l.paths)
+#                 for agent_idx in 1:alg.N
+#                     Flux.trainable(alg.worker_agents[agent_idx].actor_model.model).layers[idx].paths[i].weight .= copy(path.weight)
+#                     Flux.trainable(alg.worker_agents[agent_idx].actor_model.model).layers[idx].paths[i].bias .= copy(path.bias)
+#                 end
+#             end
+#         else
+#             for agent_idx in 1:alg.N
+#                 Flux.trainable(alg.worker_agents[agent_idx].actor_model.model).layers[idx].weight .= copy(l.weight)
+#                 Flux.trainable(alg.worker_agents[agent_idx].actor_model.model).layers[idx].bias .= copy(l.bias)
+#             end
+#         end
+#     end
+#     for (idx,l) in enumerate(Flux.trainable(cpu_critic_model).layers)
+#         if typeof(l) <: Split
+#             for (i, path) in enumerate(l.paths)
+#                 for agent_idx in 1:alg.N
+#                     Flux.trainable(alg.worker_agents[agent_idx].critic_model.model).layers[idx].paths[i].weight .= copy(path.weight)
+#                     Flux.trainable(alg.worker_agents[agent_idx].critic_model.model).layers[idx].paths[i].bias .= copy(path.bias)
+#                 end
+#             end
+#         else
+#             for agent_idx in 1:alg.N
+#                 Flux.trainable(alg.worker_agents[agent_idx].critic_model.model).layers[idx].weight .= copy(l.weight)
+#                 Flux.trainable(alg.worker_agents[agent_idx].critic_model.model).layers[idx].bias .= copy(l.bias)
+#             end
+#         end
+#     end
+# end
+
+function update_actor_learners!(agent::StandardActorCritic, alg::PPO{G}) where {G <: AbstractAction}
     cpu_actor_model = agent.actor_model.model |> cpu
     cpu_critic_model = agent.critic_model.model |> cpu
-    for (idx,l) in enumerate(Flux.trainable(cpu_actor_model).layers)
-        if typeof(l) <: Split
-            for (i, path) in enumerate(l.paths)
-                for agent_idx in 1:alg.N
-                    Flux.trainable(alg.worker_agents[agent_idx].actor_model.model).layers[idx].paths[i].weight .= copy(path.weight)
-                    Flux.trainable(alg.worker_agents[agent_idx].actor_model.model).layers[idx].paths[i].bias .= copy(path.bias)
-                end
-            end
-        else
-            for agent_idx in 1:alg.N
-                Flux.trainable(alg.worker_agents[agent_idx].actor_model.model).layers[idx].weight .= copy(l.weight)
-                Flux.trainable(alg.worker_agents[agent_idx].actor_model.model).layers[idx].bias .= copy(l.bias)
-            end
-        end
-    end
-    for (idx,l) in enumerate(Flux.trainable(cpu_critic_model).layers)
-        if typeof(l) <: Split
-            for (i, path) in enumerate(l.paths)
-                for agent_idx in 1:alg.N
-                    Flux.trainable(alg.worker_agents[agent_idx].critic_model.model).layers[idx].paths[i].weight .= copy(path.weight)
-                    Flux.trainable(alg.worker_agents[agent_idx].critic_model.model).layers[idx].paths[i].bias .= copy(path.bias)
-                end
-            end
-        else
-            for agent_idx in 1:alg.N
-                Flux.trainable(alg.worker_agents[agent_idx].critic_model.model).layers[idx].weight .= copy(l.weight)
-                Flux.trainable(alg.worker_agents[agent_idx].critic_model.model).layers[idx].bias .= copy(l.bias)
-            end
-        end
+
+    for worker in alg.worker_agents
+        Flux.loadmodel!(worker.actor_model.model, cpu_actor_model)
+        Flux.loadmodel!(worker.critic_model.model, cpu_critic_model)
     end
 end
+
 
 function unzip(a; dims = 1)
     return map(x -> cat(getfield.(a, x)..., dims=dims), fieldnames(eltype(a)))

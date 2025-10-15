@@ -189,7 +189,7 @@ function gradient_calculation_and_update!(alg::PPO{ContinuousAct}, agent::Combin
         return alg.c1 * L_value_loss - L_CLIP - alg.c2 * entropy
     end
     # get combined and critic gradients
-    ∇_combined = gradient(combined_m -> policy_loss_calculation(combined_m), combined_m) 
+    ∇_combined = gradient(combined_m -> loss_calculation(combined_m), combined_m) 
     # update combined nd critic models 
     Flux.update!(agent.combined_model._optimizer_state, agent.combined_model.model, ∇_combined[1])
 end
@@ -351,9 +351,8 @@ function validation_episode!(alg::PPO{G}, env::E, agent::A; render::Bool=false) 
     step=0
     while env.terminal == false # bool flag to denote whether routing has finished
         # calculate the mode outputs based on the current graph
-        action, value, probs = get_action(typeof(alg), agent, state; det=true)
+        action, _, _ = get_action(typeof(alg), agent, state; det=true)
         if render==true
-            # sleep(0.005)
             render!(env)
         end
         state, reward, term = step!(env, action)
