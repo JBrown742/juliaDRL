@@ -1,36 +1,36 @@
 using Distributed
 if nworkers() == 1
-  addprocs(12)
+  addprocs(2)
 end
-
-@everywhere using Revise
+using Revise
 @everywhere using juliaDRL
+# using juliaDRL
 using Flux
 workers()
 
-env = BipedalWalker(500)
+env = BipedalWalker(2000, stuck_threshold=20)
 
-env.observation_highs
 actor_network = Chain(
-Dense(length(env.observation_highs), 64, leakyrelu; init=Flux.orthogonal), 
-  Dense(64, 64, leakyrelu; init=Flux.orthogonal),   
-  Split(Dense(64, 4, tanh;init=Flux.orthogonal), Dense(64, 4, tanh;init=Flux.orthogonal))
+Dense(length(env.observation_highs), 64, tanh; init=Flux.glorot_normal), 
+  Dense(64, 64, tanh; init=Flux.glorot_normal),   
+  Dense(64, 64, tanh; init=Flux.glorot_normal),
+  Split(Dense(64, 4, tanh;init=Flux.glorot_normal), Dense(64, 4, tanh;init=Flux.glorot_normal))
 )         # Output layer (for 10 classes)
 actor_optim = Flux.Optimisers.Adam(1e-4)
 actor_model = DNN(actor_network, actor_optim)
 
 critic_network = Chain(
-Dense(length(env.observation_highs), 64, leakyrelu; init=Flux.orthogonal), 
-  Dense(64, 128, leakyrelu; init=Flux.orthogonal),   
-  Dense(128, 1;init=Flux.orthogonal))                  # Output layer (for 10 classes)                        # Output layer (for 10 classes)
+Dense(length(env.observation_highs), 64, tanh; init=Flux.glorot_normal), 
+  Dense(64, 64, tanh; init=Flux.glorot_normal),  
+  Dense(64, 64, tanh; init=Flux.glorot_normal),    
+  Dense(64, 1;init=Flux.glorot_normal))                  # Output layer (for 10 classes)                        # Output layer (for 10 classes)
 critic_optim = Flux.Optimisers.Adam(eta=1e-4)
 critic_model = DNN(critic_network, critic_optim)
 agent = StandardActorCritic(actor_model, critic_model)
 
 
 agent = StandardActorCritic(actor_model, critic_model)
-alg = PPO(MultiContinuousAct, nworkers(), 256, nworkers(), agent, 256, 0.99, 0.95, 0.15, 1., 0.002, 1)
-
+alg = PPO(MultiContinuousAct, nworkers(), 2048, 10, agent, 64, 0.999, 0.95, 0.18, 0.1, 0.001, 1)
 
 ## ----------------------------------------------------------------------------------------------------
 ## Combined Actor critic stuff
@@ -38,7 +38,7 @@ alg = PPO(MultiContinuousAct, nworkers(), 256, nworkers(), agent, 256, 0.99, 0.9
 # combined_network = Chain(
 # Dense(length(env.observation_highs), 64, leakyrelu; init=Flux.orthogonal), 
 #   Dense(64, 64, leakyrelu; init=Flux.orthogonal),   
-#   Split(Dense(64, 4, tanh;init=Flux.orthogonal), Dense(64, 4, tanh;init=Flux.orthogonal), Dense(64, 1; init=Flux.glorot_normal))
+#   Split(Dense(64, 4, leakyrelu;init=Flux.orthogonal), Dense(64, 4, leakyrelu;init=Flux.orthogonal), Dense(64, 1; init=Flux.glorot_normal))
 # )      # Output layer (for 10 classes)
 # combined_optim = Flux.Optimisers.Adam(1e-4)
 # combined_model = DNN(combined_network, combined_optim)
@@ -47,54 +47,23 @@ alg = PPO(MultiContinuousAct, nworkers(), 256, nworkers(), agent, 256, 0.99, 0.9
 
 # alg = PPO(MultiContinuousAct, nworkers(), 256, nworkers(), agent, 256, 0.99, 0.95, 0.15, 1., 0.002, 1)
 
-learn(env, alg; training_iters=5000, checkpoint_freq=10, save_dir="/home/johnny/Documents/PersonalCode/juliaDRL/test_data/BipedalWalker/", test_name="PPO_StandardActorCritic_1")
+learn(env, alg; training_iters=500, checkpoint_freq=10, save_dir="/home/johnny/Documents/PersonalCode/juliaDRL/test_data/BipedalWalker/", test_name="PPO_StandardActorCritic_1", random_policy=true)
+learn(env, alg; training_iters=500, checkpoint_freq=10, save_dir="/home/johnny/Documents/PersonalCode/juliaDRL/test_data/BipedalWalker/", test_name="PPO_StandardActorCritic_2")
+env.episode_length += 50
+learn(env, alg; training_iters=200, checkpoint_freq=10, save_dir="/home/johnny/Documents/PersonalCode/juliaDRL/test_data/BipedalWalker/", test_name="PPO_StandardActorCritic_3")
+env.episode_length += 50
+learn(env, alg; training_iters=200, checkpoint_freq=10, save_dir="/home/johnny/Documents/PersonalCode/juliaDRL/test_data/BipedalWalker/", test_name="PPO_StandardActorCritic_4")
+env.episode_length += 50
+learn(env, alg; training_iters=200, checkpoint_freq=10, save_dir="/home/johnny/Documents/PersonalCode/juliaDRL/test_data/BipedalWalker/", test_name="PPO_StandardActorCritic_5")
+env.episode_length += 50
+learn(env, alg; training_iters=200, checkpoint_freq=10, save_dir="/home/johnny/Documents/PersonalCode/juliaDRL/test_data/BipedalWalker/", test_name="PPO_StandardActorCritic_6")
+env.episode_length += 50
+learn(env, alg; training_iters=200, checkpoint_freq=10, save_dir="/home/johnny/Documents/PersonalCode/juliaDRL/test_data/BipedalWalker/", test_name="PPO_StandardActorCritic_7")
+env.episode_length += 50
+learn(env, alg; training_iters=200, checkpoint_freq=10, save_dir="/home/johnny/Documents/PersonalCode/juliaDRL/test_data/BipedalWalker/", test_name="PPO_StandardActorCritic_8")
+env.episode_length += 50
 
-
-x = cu(actor_model)
-
-typeof(x) == typeof(actor_model)
-
-old = Flux.params(agent.actor_model.model)
-new = Flux.trainable(agent.actor_model.model)
-x = Flux.trainable(agent.actor_model.model).layers[3]
-Flux.trainable(agent.actor_model.model).layers[1].weight .= rand(Float32, (64,24))
-
-
-typeof(x)
-
-Flux.trainable(agent.actor_model.model).layers[1].weight == x
-
-
-
-
+step!(env, Float32[0.790377, 0.8312113, -0.8979085, -0.93469393])
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-actiontypevizenv = BipedalWalker(2000, render=true)
-visualise_learning(alg, vizenv, "juliaDRL/test_data/BipedalWalker/PPODemoTestNew2")
-
-a = load_agent(StandardActorCritic, DNN, "/home/johnny/Documents/PersonalCode/juliaDRL/test_data/BipedalWalker/PPODemoTestNew3/agent_best")
-alg = PPO(MultiContinuousAct, nworkers(), 2048, 10, a, 64, 0.99, 0.95, 0.18, 1., 0., 3)
-
-vizenv = BipedalWalker(2000, render=true)
-validation_episode!(alg, vizenv, a)
-
-close!(vizenv)
-close!(env)
-
-agent.critic_model(vizenv.state)

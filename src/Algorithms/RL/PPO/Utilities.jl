@@ -2,7 +2,7 @@
 # ------------ get_actions functions ------- #
 
 ## ---------------------------- Discrete Actions ---------------------------------- ###
-function get_action(::Type{PPO{DiscreteAct}}, agent::CombinedActorCritic, obs::O; det=false, mask=nothing) where {O <: AbstractObservation}
+function get_action(::Type{PPO{DiscreteAct}}, agent::CombinedActorCritic, obs::O; det=false, random_policy=false, mask=nothing) where {O <: AbstractObservation}
     outputs, value = agent.combined_model(obs)
     if isnothing(mask)
         mask = ones(length(outputs))
@@ -19,7 +19,7 @@ function get_action(::Type{PPO{DiscreteAct}}, agent::CombinedActorCritic, obs::O
 end
 
 
-function get_action(::Type{PPO{DiscreteAct}}, agent::StandardActorCritic, obs::O; det=false, mask=nothing) where {O <: AbstractObservation}
+function get_action(::Type{PPO{DiscreteAct}}, agent::StandardActorCritic, obs::O; det=false, random_policy=false, mask=nothing) where {O <: AbstractObservation}
     outputs = agent.actor_model(obs)
     value = agent.critic_model(obs)
     if isnothing(mask)
@@ -38,65 +38,71 @@ end
 
 ## ------------------------------- Continuous Actions --------------------------------- ##
 
-function get_action(::Type{PPO{ContinuousAct}}, agent::StandardActorCritic, obs::O; det=false) where {O <: AbstractObservation}
+function get_action(::Type{PPO{ContinuousAct}}, agent::StandardActorCritic, obs::O; det=false, random_policy=false) where {O <: AbstractObservation}
     μ, log_σ = agent.actor_model(obs)
     value = agent.critic_model(obs)
     σ = exp.(log_σ)
     if det == true
-        action = μ[1]
+        action_raw = float32.(tanh.(μ))
     else
-        d = Normal(Float64(μ[1]), σ[1])
-        action = Float32(rand(d, 1)[1])
+        action_raw = float32.(tanh.(μ .+ σ .* randn()))
     end
-    return action, value[1], log_gauss_pdf(action, μ[1], σ[1])
+    action = action_raw
+    return action[1], value[1], log_gauss_pdf(action[1], μ[1], σ[1])
 end
 
 
 
-function get_action(::Type{PPO{ContinuousAct}}, agent::CombinedActorCritic, obs::O; det=false) where {O <: AbstractObservation}
+function get_action(::Type{PPO{ContinuousAct}}, agent::CombinedActorCritic, obs::O; det=false, random_policy=false) where {O <: AbstractObservation}
     μ, log_σ, value = agent.combined_model(obs)
     σ = exp.(log_σ)
     if det == true
-        action = μ[1]
+        action_raw = float32.(tanh.(μ))
     else
-        d = Normal(Float64(μ[1]), σ[1])
-        action = Float32(rand(d, 1)[1])
+        action_raw = float32.(tanh.(μ .+ σ .* randn()))
     end
-    return action, value[1], log_gauss_pdf(action, μ[1], σ[1])
+    action = action_raw
+    return action[1], value[1], log_gauss_pdf(action[1], μ[1], σ[1])
 end
 
 ## ------------------------------- Multicontinuous Actions ---------------------------- ##
-function get_action(::Type{PPO{MultiContinuousAct}}, agent::StandardActorCritic, obs::O; det=false) where {O <: AbstractObservation}
+function get_action(::Type{PPO{MultiContinuousAct}}, agent::StandardActorCritic, obs::O; det=false, random_policy=false) where {O <: AbstractObservation}
     # Need to decide here how we expect 
     μ_vec, log_σ_vec = dropdims.(agent.actor_model(obs), dims=2) # dropdims here so that each is a vector. This function will be called exclusively by a single agent
     value = agent.critic_model(obs)
     σ_vec = exp.(log_σ_vec)
+
     if det == true
-        action_vec = μ_vec
+        action_vec_raw = Float32.(tanh.(μ_vec))
+    elseif random_policy == true
+        action_vec_raw = Float32.(rand(Uniform(-1, 1), length(σ_vec)))
     else
-        d_vec = [Normal(Float64.(μ), Float64.(σ)) for (μ, σ) in zip(μ_vec, σ_vec)]
-        action_vec = Float32.(rand.(d_vec))
+        action_vec_raw = Float32.(tanh.(μ_vec .+ σ_vec .* randn(length(σ_vec))))
     end
+    action_vec = action_vec_raw
+    println("μ:: $(μ_vec) sigma:: $(σ_vec), actions:: $(action_vec_raw)")
     return action_vec, value[1], log_gauss_pdf_multi(action_vec, μ_vec, σ_vec)
 end
 
-function get_action(::Type{PPO{MultiContinuousAct}}, agent::CombinedActorCritic, obs::O; det=false) where {O <: AbstractObservation}
+function get_action(::Type{PPO{MultiContinuousAct}}, agent::CombinedActorCritic, obs::O; det=false, random_policy=false) where {O <: AbstractObservation}
     μ_vec, log_σ_vec, value = dropdims.(agent.combined_model(obs), dims=2)
     σ_vec = exp.(log_σ_vec)
     if det == true
-        action_vec = μ_vec
+        action_vec_raw = Float32.(tanh.(μ_vec))
+    elseif random_policy == true
+        action_vec_raw = Float32.(rand(Uniform(-1, 1), length(σ_vec)))
     else
-        d_vec = [Normal(Float64.(μ), Float64.(σ)) for (μ, σ) in zip(μ_vec, σ_vec)]
-        action_vec = Float32.(rand.(d_vec))
+        action_vec_raw = Float32.(tanh.(μ_vec .+ σ_vec .* randn(length(σ_vec))))
     end
+    action_vec = action_vec_raw
     return action_vec, value[1], log_gauss_pdf_multi(action_vec, μ_vec, σ_vec)
 end
 
 ## --------------------------- MultiDiscrete actions ----------------------------------- ##
-function get_action(::Type{PPO{MultiDiscreteAct}}, agent::StandardActorCritic, obs::O; det=false) where {O <: AbstractObservation}
+function get_action(::Type{PPO{MultiDiscreteAct}}, agent::StandardActorCritic, obs::O; det=false, random_policy=false) where {O <: AbstractObservation}
     μ, log_σ = agent.actor_model(obs)
     value = agent.critic_model(obs)
-    σ = exp.(log_σ)
+    σ = exp.(log_σ)    
     if det == true
         action = μ[1]
     else
@@ -106,7 +112,7 @@ function get_action(::Type{PPO{MultiDiscreteAct}}, agent::StandardActorCritic, o
     return action, value[1], log_gauss_pdf(action, μ[1], σ[1])
 end
 
-function get_action(::Type{PPO{MultiDiscreteAct}}, agent::CombinedActorCritic, obs::O; det=false) where {O <: AbstractObservation}
+function get_action(::Type{PPO{MultiDiscreteAct}}, agent::CombinedActorCritic, obs::O; det=false, random_policy=false) where {O <: AbstractObservation}
     μ, log_σ, value = agent.combined_model(obs)
     σ = exp.(log_σ)
 
@@ -120,44 +126,44 @@ function get_action(::Type{PPO{MultiDiscreteAct}}, agent::CombinedActorCritic, o
 end
 
 # ------------------------  Dispatches for use within data collection ------- #
-function get_action(::Type{PPO{DiscreteAct}}, agent::A, env::E; det=false) where {E <: AbstractEnv, A <: AbstractAgent}
-    return get_action(PPO{DiscreteAct}, agent, env.state; det=det, mask=env.action_mask)
+function get_action(::Type{PPO{DiscreteAct}}, agent::A, env::E; det=false, random_policy=false) where {E <: AbstractEnv, A <: AbstractAgent}
+    return get_action(PPO{DiscreteAct}, agent, env.state; det=det, random_policy=random_policy, mask=env.action_mask)
 end
 
-function get_action(::Type{PPO{ContinuousAct}}, agent::A, env::E; det=false) where {E <: AbstractEnv, A <: AbstractAgent}
-    return get_action(PPO{ContinuousAct}, agent, env.state; det=det)
+function get_action(::Type{PPO{ContinuousAct}}, agent::A, env::E; det=false, random_policy=false) where {E <: AbstractEnv, A <: AbstractAgent}
+    return get_action(PPO{ContinuousAct}, agent, env.state; det=det, random_policy=random_policy)
 end
 
-function get_action(::Type{PPO{MultiDiscreteAct}}, agent::A, env::E; det=false) where {E <: AbstractEnv, A <: AbstractAgent}
-    return get_action(PPO{MultiDiscreteAct}, agent, env.state; det=det, mask=env.action_mask)
+function get_action(::Type{PPO{MultiDiscreteAct}}, agent::A, env::E; det=false, random_policy=false) where {E <: AbstractEnv, A <: AbstractAgent}
+    return get_action(PPO{MultiDiscreteAct}, agent, env.state; det=det, random_policy=random_policy, mask=env.action_mask)
 end
 
-function get_action(::Type{PPO{MultiContinuousAct}}, agent::A, env::E; det=false) where {E <: AbstractEnv, A <: AbstractAgent}
-    return get_action(PPO{MultiContinuousAct}, agent, env.state; det=det)
+function get_action(::Type{PPO{MultiContinuousAct}}, agent::A, env::E; det=false, random_policy=false) where {E <: AbstractEnv, A <: AbstractAgent}
+    return get_action(PPO{MultiContinuousAct}, agent, env.state; det=det, random_policy=random_policy)
 end
 
 function log_gauss_pdf(x::Float32, μ::Float32, σ::Float32=0.05f0)
-    return -log(σ) - log(sqrt(2f0 * π))  - 0.5f0 * (((x - μ)/σ) ^ 2)
+    return -log(σ) - log(sqrt(2f0 * π))  - 0.5f0 * (((atanh(x) - μ)/σ) ^ 2) - log(1 - x ^2 + 1e-6)
 end
 
 function log_gauss_pdf(x::Vector{Float32}, μ::Vector{Float32}, σ::Vector{Float32})
-    return -log.(σ) .- log(sqrt(2f0 .* π))  .- 0.5f0 .* (((x .- μ)./σ) .^ 2)
+    return -log.(σ) .- log(sqrt(2f0 .* π))  .- 0.5f0 .* (((atanh.(x) .- μ)./σ) .^ 2) - log.(1 .- x .^ 2 .+ 1e-6)
 end
 
 function log_gauss_pdf_multi(x::Vector{Float32}, μ::Vector{Float32}, σ::Vector{Float32})
-    vals = -log.(σ) .- log.(sqrt.(2f0 .* π))  .- 0.5f0 .* (((x .- μ)./σ) .^ 2)
-    return sum(vals)[1]
+    vals = -log.(σ) .- log.(sqrt.(2f0 .* π))  .- 0.5f0 .* (((atanh.(x) .- μ)./σ) .^ 2)
+    return sum(vals)[1] - sum(log.(1 .- x .^ 2 .+ 1e-6))[1]
 end
 
 function log_gauss_pdf_multi(x::Vector{Vector{Float32}}, μ::Matrix{Float32}, σ::Matrix{Float32})
-    x_mat = cat(x..., dims=2)
-    vals = -log.(σ) .- log(sqrt(2f0 .* π))  .- 0.5f0 .* (((x_mat .- μ)./σ) .^ 2)
-    return dropdims(sum(vals, dims=1), dims=1)
+    x_mat = hcat(x...)
+    vals = -log.(σ) .- log(sqrt(2f0 .* π))  .- 0.5f0 .* (((atanh.(x_mat) .- μ)./σ) .^ 2)
+    return dropdims(sum(vals, dims=1) .- sum(log.(1 .- x_mat .^ 2 .+ 1e-6), dims=1), dims=1)
 end
 
 function log_gauss_pdf_multi(x::Matrix{Float32}, μ::Matrix{Float32}, σ::Matrix{Float32})
-    vals = -log.(σ) .- log.(sqrt.(2f0 .* π))  .- 0.5f0 .* (((x .- μ)./σ) .^ 2)
-    return dropdims(sum(vals, dims=1), dims=1)
+    vals = -log.(σ) .- log.(sqrt.(2f0 .* π))  .- 0.5f0 .* (((atanh.(x) .- μ)./σ) .^ 2)
+    return dropdims(sum(vals, dims=1) .- sum(log.(1 .- x .^ 2 .+ 1e-6), dims=1), dims=1)
 end
 
 
@@ -248,5 +254,4 @@ function infer_mask(probabilities::Vector{Float32})
     mask = zeros(Float32, N) # build a mask vector to zero out all nodes ∉ NH
     mask[idxs] .= mask[idxs] .- Inf32
     return mask
-    fun
 end

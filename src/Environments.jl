@@ -3,6 +3,7 @@ module Environments
 using Plots
 using Combinatorics
 using Distributed
+using Distributions
 using PyCall 
 using LinearAlgebra
 using StatsBase
