@@ -1,27 +1,30 @@
 using Distributed
 if nworkers() == 1
-    addprocs(10)
+    addprocs(6)
 end
-
 @everywhere using juliaDRL
 using Flux
 ## ----------------- Standard actor-critic part ------------------ ## 
 env = Pendulum(200)
 
+CLIP_THRESHOLD= 1f0
+
 actor_network = Chain(
-    Dense(length(env.state), 64, leakyrelu; init=Flux.glorot_uniform),
-    Dense(64, 64, leakyrelu; init=Flux.glorot_uniform),
-    Split((Dense(64, 1, tanh;init=Flux.glorot_uniform), Dense(64, 1, tanh;init=Flux.glorot_uniform)))
+    Dense(length(env.state), 64, tanh; init=Flux.glorot_uniform),
+    Dense(64, 64, tanh; init=Flux.glorot_uniform),
+    Split((Dense(64, 1;init=Flux.glorot_uniform), Dense(64, 1, tanh;init=Flux.glorot_uniform)))
 )
-actor_optim = Flux.Optimisers.Adam(1e-3)
+base_actor_optim = Flux.Optimisers.Adam(1e-3)
+actor_optim = OptimiserChain(ClipNorm(CLIP_THRESHOLD), base_actor_optim)
 actor_model = DNN(actor_network, actor_optim)
 
 critic_network = Chain(
-    Dense(length(env.state), 64, leakyrelu; init=Flux.glorot_uniform),
-    Dense(64, 64, leakyrelu; init=Flux.glorot_uniform),
+    Dense(length(env.state), 64, tanh; init=Flux.glorot_uniform),
+    Dense(64, 64, tanh; init=Flux.glorot_uniform),
     Dense(64, 1; init=Flux.glorot_uniform)
 )
-critic_optim = Flux.Optimisers.Adam(2e-3)
+base_critic_optim = Flux.Optimisers.Adam(1e-3)
+critic_optim = OptimiserChain(ClipNorm(CLIP_THRESHOLD), base_critic_optim)
 critic_model = DNN(critic_network, critic_optim)
 
 agent = StandardActorCritic(actor_model, critic_model)
@@ -42,10 +45,11 @@ agent = StandardActorCritic(actor_model, critic_model)
 
 
 # agent = CombinedActorCritic(combined_model)
-alg = PPO(ContinuousAct, nworkers(), 256, nworkers(), agent, 256, 0.99, 0.95, 0.2, 1., 0.002, 5)
+alg = PPO(ContinuousAct, nworkers(), 256, 10, agent; batch_size=64, γ=0.9, λ=0.95, ϵ=0.2, c1=0.5, c2=0.0001, sync_frequency=1)
 
-learn(env, alg; training_iters=500, save_dir="/home/johnny/Documents/PersonalCode/juliaDRL/test_data/Pendulum", test_name="PPO_CombinedActorCritic_1")
-close!(env)
+learn(env, alg; training_iters=100, save_dir="/home/johnny/Documents/PersonalCode/juliaDRL/test_data/Pendulum", test_name="PPO_CombinedActorCritic_1")
+
+# close!(env)
 
 
 vizenv = Pendulum(500; render=true)
