@@ -36,8 +36,10 @@ function clone(s::BipedalWalker)
 end
 
 function step!(env::BipedalWalker, action::Vector{Float32})
-    clipped_action = clamp.(action, -1f0, 1f0)
-    s, reward, terminated, truncated, info = env.pyenv.step(clipped_action)
+    # println("state:: ", env.state)
+    s, reward, terminated, truncated, info = env.pyenv.step(action)
+    # println("next state:: ", s)
+    # println("reward:: ", reward)
     observation = process_state(env, s)
     if isapprox(observation[1:end-10], env.state[1:end-10], rtol=1e-4)
         env.stuck_counter += 1
@@ -46,13 +48,15 @@ function step!(env::BipedalWalker, action::Vector{Float32})
     end
     if env.stuck_counter >= env.stuck_threshold
         terminated = true
-        # reward -= 100f0
+        reward -= 100f0
     end
     env.state = observation
     env.terminal = terminated
     env.episode_step += 1
     if env.episode_step == env.episode_length
+        # env.episode_length += 1
         term = true
+        # reward += 300
     else
         term = terminated || truncated
     end
@@ -65,6 +69,11 @@ function render!(env::BipedalWalker)
 end
 
 function reset!(env::BipedalWalker) 
+    if env.renderize
+        pe = gym.make("BipedalWalker-v3", render_mode="human", hardcore=env.hardcore);
+    else            
+        pe = gym.make("BipedalWalker-v3", hardcore=env.hardcore);
+    end
     (s, info) = env.pyenv.reset()
     observation = process_state(env, s)
     env.state = observation

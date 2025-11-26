@@ -29,7 +29,7 @@ function step!(env::Cartpole, action::Int)
     observation, reward, terminated, truncated, info = env.pyenv.step(act)
     env.state = normalize(observation)
     env.terminal = terminated
-    return Float32.(env.state), reward, terminated || truncated
+    return Float32.(env.state), Float32(reward), terminated || truncated
 end
 
 

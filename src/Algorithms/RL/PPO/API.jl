@@ -2,7 +2,8 @@ function learn(env::E, alg::PPO;
     training_iters = 1000,
     checkpoint_freq=1, vals_per_checkpoint=10, 
     save_dir=pwd(), test_name="test", average_window=2,
-    plot_type="max_min"
+    plot_type="max_min",
+    random_policy=false
 ) where {E <: AbstractEnv}
     info_dict = Dict{String, Any}(
         "Agent" => repr(alg.central_agent), 
@@ -41,22 +42,24 @@ function learn(env::E, alg::PPO;
     # execute several learning episodes to fill the buffer
     # then repeat for the number of training iterations
     # initially fill the buffer 
-    trajectories = get_trajectories!(alg, env)
+    trajectories = get_trajectories!(alg, env, random_policy=random_policy)
     for i in 1:training_iters 
         # asynchronously launch training
         training_future = @async train!(alg, trajectories...)        
         # while master is training set workers off collctiong trajectories
-        collection_future = @async get_trajectories!(alg, env)
+        collection_future = @async get_trajectories!(alg, env, random_policy=random_policy)
         # wait for training to finish
         # update trajectories
         if i % checkpoint_freq == 0
             reward_av = mean([validation_episode!(env, alg) for _ in 1:vals_per_checkpoint])
-            if reward_av > best_reward
-                best_reward = reward_av
-                best_agent = deepcopy(alg.central_agent)
-                _ = validation_episode!(vizenv, alg, render=true)
-                save_agent(best_agent, agent_dir; agent_info="iter_$(i)")
-            end
+            _ = validation_episode!(vizenv, alg, render=true)
+
+            # if reward_av > best_reward
+            #     best_reward = reward_av
+            #     best_agent = deepcopy(alg.central_agent)
+            #     _ = validation_episode!(vizenv, alg, render=true)
+            #     save_agent(best_agent, agent_dir; agent_info="iter_$(i)")
+            # end
             push!(reward_history, reward_av)
             println("Episode $(i):: Average reward is $(reward_av)")
         end
