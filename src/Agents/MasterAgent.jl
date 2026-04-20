@@ -1,28 +1,23 @@
-abstract type AbstractModel end
-abstract type AbstractAgent end
-
 mutable struct StandardActorCritic <: AbstractAgent
-    actor_model::AbstractModel
-    critic_model::AbstractModel
-    model_type::Type
-    function StandardActorCritic(actor::AbstractModel, critic::AbstractModel)
-        return new(actor, critic, typeof(actor))
+    actor_model::FluxModel
+    critic_model::FluxModel
+    function StandardActorCritic(actor::FluxModel, critic::FluxModel)
+        return new(actor, critic)
     end
 end
 
 mutable struct CombinedActorCritic <: AbstractAgent
-    combined_model::AbstractModel
-    model_type::Type
-    function CombinedActorCritic(m::AbstractModel)
-        return new(m, typeof(m))
+    combined_model::FluxModel
+    function CombinedActorCritic(m::FluxModel)
+        return new(m)
     end
 end
 
 mutable struct StandardPolicy <: AbstractAgent
-    model::AbstractModel
+    model::FluxModel
 end
 mutable struct StandardValue <: AbstractAgent
-    model::AbstractModel
+    model::FluxModel
 end
 
 function save_agent(A::StandardActorCritic, save_dir::String; agent_info::String="")
@@ -61,33 +56,16 @@ function save_agent(A::CombinedActorCritic, save_dir::String; agent_info::String
     save_model(combined_model, agent_save_dir; model_info="combined")
 end
 
-function load_agent(::Type{StandardActorCritic}, ::Type{M}, agent_dir::String) where {M <: AbstractModel}
-    actor = load_model(M, agent_dir * "/actor_model.bson")
-    critic = load_model(M, agent_dir * "/critic_model.bson")
+function load_agent(::Type{StandardActorCritic}, agent_dir::String)
+    actor = load_model(FluxModel, agent_dir * "/actor_model.jls")
+    critic = load_model(FluxModel, agent_dir * "/critic_model.jls")
     return StandardActorCritic(actor, critic)
 end
 
-function load_agent(::Type{CombinedActorCritic}, ::Type{M}, agent_dir::String) where {M <: AbstractModel}
-    combined = load_model(M, agent_dir * "/combined_model.bson")
+function load_agent(::Type{CombinedActorCritic}, agent_dir::String)
+    combined = load_model(FluxModel, agent_dir * "/combined_model.jls")
     return CombinedActorCritic(combined)
 end
-
-
-const VectorObs = Union{Vector{Float64}, Vector{Float32}}
-const MatrixObs = Union{Matrix{Float64}, Matrix{Float32}}
-const ArrayObs = Union{Array{Float64}, Array{Float32}}
-mutable struct GraphObs 
-    features::Union{Matrix{Float64}, Matrix{Float32}}
-    adjacency::Union{Matrix{Float64}, Matrix{Float32}}
-end
-const AbstractObservation = Union{VectorObs, MatrixObs, ArrayObs, GraphObs}
-
-const DiscreteAct = Int
-const ContinuousAct = Float32
-const MultiDiscreteAct = Vector{DiscreteAct}
-const MultiContinuousAct = Vector{ContinuousAct}
-
-const AbstractAction = Union{DiscreteAct, ContinuousAct, MultiDiscreteAct, MultiContinuousAct}
 
 
 struct Split{T}

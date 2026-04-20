@@ -42,15 +42,15 @@ combined_network = Chain(
 )
 base_optim = Flux.Optimisers.Adam(1e-4)
 combined_optim = OptimiserChain(ClipNorm(CLIP_THRESHOLD), base_optim)
-combined_model = DNN(combined_network, combined_optim)
+combined_model = FluxModel(combined_network, combined_optim)
 
 
 agent = CombinedActorCritic(combined_model)
 alg = PPO(DiscreteAct, nworkers(), 200, 10, agent; batch_size=64, γ=0.99, λ=0.95, ϵ=0.2, c1=0.5, c2=0.01, sync_frequency=1)
 
 # ------------------------------------------------------- #
-learn(env, alg; training_iters=100, save_dir="/home/johnny/Documents/PersonalCode/juliaDRL/test_data/Cartpole", test_name="PPO_CombinedActorCritic_2", average_window=10)
+learn(env, alg; training_iters=50, save_dir="/home/johnny/Documents/PersonalCode/juliaDRL/test_data/Cartpole", test_name="PPO_CombinedActorCritic_2", average_window=10)
 
 # For visualistaion
-vizenv = Cartpole(200, render=true)
-visualise_learning(alg, vizenv, "/home/johnny/Documents/PersonalCode/juliaDRL/test_data/Cartpole/PPO_CombinedActorCritic_1")
+# vizenv = Cartpole(200, render=true)
+# visualise_learning(alg, vizenv, "/home/johnny/Documents/PersonalCode/juliaDRL/test_data/Cartpole/PPO_CombinedActorCritic_1")

@@ -36,10 +36,12 @@ function clone(s::BipedalWalker)
 end
 
 function step!(env::BipedalWalker, action::Vector{Float32})
-    # println("state:: ", env.state)
-    s, reward, terminated, truncated, info = env.pyenv.step(action)
-    # println("next state:: ", s)
-    # println("reward:: ", reward)
+    # DEFINITIVE STABILITY FIX: Hard clamp inside the environment wrapper
+    # This ensures that even if the policy produces an extreme value, 
+    # the simulation (Box2D) receives a valid physical torque.
+    safe_action = clamp.(action, -1.0f0, 1.0f0)
+    s, reward, terminated, truncated, info = env.pyenv.step(safe_action)
+    
     observation = process_state(env, s)
     if isapprox(observation[1:end-10], env.state[1:end-10], rtol=1e-4)
         env.stuck_counter += 1
@@ -51,16 +53,14 @@ function step!(env::BipedalWalker, action::Vector{Float32})
         reward -= 100f0
     end
     env.state = observation
-    env.terminal = terminated
+    env.terminal = terminated || truncated
     env.episode_step += 1
-    if env.episode_step == env.episode_length
-        # env.episode_length += 1
-        term = true
-        # reward += 300
-    else
-        term = terminated || truncated
+    
+    if env.episode_step >= env.episode_length
+        env.terminal = true
     end
-    return Float32.(observation), Float32.(reward), term
+    
+    return Float32.(observation), Float32.(reward), env.terminal
 end
 
 function render!(env::BipedalWalker)

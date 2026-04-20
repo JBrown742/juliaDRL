@@ -26,6 +26,15 @@ function clone(s::ParticleChase)
     )
 end
 
+function step!(env::ParticleChase, action::Vector{I}) where {I <: Integer}
+    # Convert MultiDiscrete integers to Float32 actions
+    # Assuming action[1] is Move-X (-1, 0, 1) and action[2] is Move-Y (-1, 0, 1)
+    # However, MultiDiscrete indices are usually 1-based in Julia sampling
+    # We map 1 -> -1, 2 -> 0, 3 -> 1
+    float_action = Float32.(action .- 2)
+    return step!(env, float_action)
+end
+
 function step!(env::ParticleChase, action::Vector{Float32})
     clipped_action = clamp.(action, -1f0, 1f0)
     env.current_position .+= clipped_action .* env.max_speed
