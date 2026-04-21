@@ -30,7 +30,7 @@ $$\delta_t = r_t + \gamma V(s_{t+1}) - V(s_t)$$
 
 ## 🛠️ Usage Example (Cartpole)
 
-The library provides a clean API for training agents. Below is a snippet of how to initialize and train a PPO agent on the Cartpole environment.
+The library provides a clean API for training agents. For details on how to add your own custom environments, see our [Environment Design Protocol](docs/Environment_Design.md).
 
 ```julia
 using juliaDRL
