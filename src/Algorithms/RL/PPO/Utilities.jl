@@ -63,7 +63,7 @@ function _get_action_continuous(agent::StandardActorCritic, obs; det=false, rand
     # STABILITY FIX: Clamp log_sigma to a reasonable range
     log_σ = clamp.(log_σ_raw, -2.0f0, 0.0f0)
     σ = exp.(log_σ)
-    μ = tanh.(μ_raw) # Squash mean to [-1, 1]
+    μ = μ_raw
     if det
         action = Float32.(μ)
     elseif random_policy
@@ -78,7 +78,7 @@ function _get_action_continuous(agent::CombinedActorCritic, obs; det=false, rand
     μ_raw, log_σ_raw, value = agent.combined_model(obs)
     log_σ = clamp.(log_σ_raw, -2.0f0, 0.0f0)
     σ = exp.(log_σ)
-    μ = tanh.(μ_raw) # Squash mean
+    μ = μ_raw # Squash mean
     if det
         action = Float32.(μ)
     elseif random_policy
@@ -95,7 +95,7 @@ function _get_action_multicontinuous(agent::StandardActorCritic, obs; det=false,
     value = agent.critic_model(obs)
     log_σ_vec = clamp.(log_σ_raw_vec, -2.0f0, 0.0f0)
     σ_vec = exp.(log_σ_vec)
-    μ_vec = tanh.(μ_raw_vec) # Squash mean
+    μ_vec = μ_raw_vec # Squash mean
     if det
         action_vec = Float32.(μ_vec)
     elseif random_policy
@@ -110,7 +110,7 @@ function _get_action_multicontinuous(agent::CombinedActorCritic, obs; det=false,
     μ_raw_vec, log_σ_raw_vec, value = dropdims.(agent.combined_model(obs), dims=2)
     log_σ_vec = clamp.(log_σ_raw_vec, -2.0f0, 0.0f0)
     σ_vec = exp.(log_σ_vec)
-    μ_vec = tanh.(μ_raw_vec) # Squash mean
+    μ_vec = μ_raw_vec # Squash mean
     if det
         action_vec = Float32.(μ_vec)
     elseif random_policy
