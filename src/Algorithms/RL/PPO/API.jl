@@ -31,21 +31,25 @@ function learn(env::E, alg::PPO;
         
         # STABILITY FIX: Reward Scaling
         # Large negative rewards in BipedalWalker can cause exploding gradients in the value function
-        scaled_targets = targets .* 0.1f0
-        scaled_errors = errors .* 0.1f0
-        scaled_advantages = advantages .* 0.1f0
+        # scaled_targets = targets .* 1.0f0
+        # scaled_errors = errors .* 1.0f0
+        # scaled_advantages = advantages .* 1.0f0
 
-        # Update normalizer with the whole batch
-        for s in states
-            update!(alg.obs_normalizer, s)
-        end
+        # # Update normalizer with the whole batch
+        # for s in states
+        #     update!(alg.obs_normalizer, s)
+        # end
         
+        # # STABILITY FIX: Update normalizer with the batch BEFORE training
+        # for s in states
+        #     update!(alg.obs_normalizer, s)
+        # end
         # Normalize states for training
-        norm_states = [normalize!(alg.obs_normalizer, s) for s in states]
+        # norm_states = [normalize!(alg.obs_normalizer, s) for s in states]
         
         # 3. Update our centralization model
         try
-            train!(alg, norm_states, actions, probs, scaled_advantages, scaled_targets, scaled_errors)
+            train!(alg, states, actions, probs, advantages, targets, errors)
         catch e
             println("Warning: Training step failed (likely NaN). Skipping. Error: ", e)
         end

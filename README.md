@@ -36,23 +36,22 @@ The library provides a clean API for training agents. For details on how to add 
 using juliaDRL
 using Flux
 
-# 1. Define your environment
+# 1. Initialize environment
 env = Cartpole(200)
 
-# 2. Define your Actor-Critic model
+# 2. Define Actor-Critic architecture
 combined_network = Chain(
-    Dense(length(env.state), 64, leakyrelu),
-    Dense(64, 64, leakyrelu),
-    Split((Dense(64, 2), Dense(64, 1))) # Split into Action Logits and State Value
+    Dense(length(env.state), 64, relu),
+    Dense(64, 64, relu),
+    Split((Dense(64, 2), Dense(64, 1))) 
 )
-model = DNN(combined_network, Adam(1e-4))
+model = FluxModel(combined_network, Flux.Adam(1e-4))
 agent = CombinedActorCritic(model)
 
-# 3. Configure the PPO algorithm
-alg = PPO(DiscreteAct, nworkers(), 200, 10, agent; 
-          batch_size=64, γ=0.99, λ=0.95, ϵ=0.2)
+# 3. Configure PPO
+alg = PPO(DiscreteAct, nworkers(), 2048, 10, agent)
 
-# 4. Start learning
+# 4. Start training
 learn(env, alg; training_iters=100)
 ```
 

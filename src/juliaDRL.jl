@@ -1,75 +1,55 @@
 module juliaDRL
 
-
-#This is the main format in order to import a module to the overall package
+# --- Modules ---
 include("Agents.jl")
 using .Agents
-
-export
-    # Define abstract types to supertype our observation 
-    # and model types
-    AbstractObservation,
-    AbstractModel,
-    AbstractAgent,
-    AbstractAction,
-
-    StandardActorCritic,
-    CombinedActorCritic,
-
-    # Specific Action Types
-    DiscreteAct,
-    ContinuousAct,
-    MultiDiscreteAct,
-    MultiContinuousAct,
-    
-    # Model types
-    FluxModel,
-
-    load_agent, 
-    save_model,
-    load_model,
-    Split
-
 
 include("Environments.jl")
 using .Environments
 
-export
-    AbstractEnv, 
+include("Algorithms.jl")
+using .Algorithms
 
+# --- Re-exports for a clean External API ---
+
+# 1. Core Types & Structures
+export
+    AbstractAgent,
+    StandardActorCritic,
+    CombinedActorCritic,
+    FluxModel,
+    Split
+
+# 2. Action Types (Multiple Dispatch keys)
+export
+    DiscreteAct,
+    ContinuousAct,
+    MultiDiscreteAct,
+    MultiContinuousAct
+
+# 3. Environments
+# We export the abstract type and the built-in benchmarks
+export
+    AbstractEnv,
     Cartpole,
     Pendulum,
     CarRacing,
     BipedalWalker,
-    ParticleChase,
+    ParticleChase
 
-    step!,
-    render!,
-    reset!, 
-    close!,
-    renderize!,
-    clone
-
-
-include("Algorithms.jl")
-using .Algorithms
-
+# 4. The Training API
+# The user should primarily interact with 'learn'
 export
-    AbstractExperience, 
-    AbstractBuffer,
-    AbstractAlgorithm,
-
-    ### Alg functions
-    train!,
-    validation_episode!,
-
-    ## API
     learn,
-    visualise_learning,
-
     PPO,
-    get_action
+    get_action,
+    validation_episode!
 
+# 5. Persistence & Utilities
+export
+    save_agent,
+    load_agent,
+    save_model,
+    load_model
 
-    
 end # module juliaDRL

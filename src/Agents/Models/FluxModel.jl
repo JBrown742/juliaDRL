@@ -17,7 +17,7 @@ function (m::FluxModel)(x::AbstractArray)
     # If the input is a vector, it's a single observation; add batch dimension.
     # If it's a matrix or higher, it's already a batch or high-D observation; pass through.
     res = if ndims(x) == 1
-        m.model(Flux.batch([x]))
+        m.model(reshape(x, :, 1))
     else
         m.model(x)
     end

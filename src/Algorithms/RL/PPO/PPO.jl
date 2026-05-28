@@ -1,44 +1,44 @@
 # using G as the abtract typeholder for action from the synonym 'gesture' since A is used for agent
 
-"""
-    RunningStat
+# """
+#     RunningStat
 
-Keeps a running estimate of mean and variance for observation normalization.
-"""
-mutable struct RunningStat
-    mean::Vector{Float32}
-    var::Vector{Float32}
-    count::Float32
-end
+# Keeps a running estimate of mean and variance for observation normalization.
+# """
+# mutable struct RunningStat
+#     mean::Vector{Float32}
+#     var::Vector{Float32}
+#     count::Float32
+# end
 
-function RunningStat()
-    return RunningStat(Float32[], Float32[], 1f-4) # small count to avoid div by zero
-end
+# function RunningStat()
+#     return RunningStat(Float32[], Float32[], 1f-4) # small count to avoid div by zero
+# end
 
-function update!(s::RunningStat, x::AbstractVector)
-    if isempty(s.mean)
-        s.mean = copy(x)
-        s.var = ones(Float32, length(x))
-        s.count = 1.0f0
-        return
-    end
-    s.count += 1.0f0
-    old_mean = copy(s.mean)
-    s.mean .+= (x .- s.mean) ./ s.count
-    s.var .+= (x .- old_mean) .* (x .- s.mean)
-end
+# function update!(s::RunningStat, x::AbstractVector)
+#     if isempty(s.mean)
+#         s.mean = copy(x)
+#         s.var = ones(Float32, length(x))
+#         s.count = 1.0f0
+#         return
+#     end
+#     s.count += 1.0f0
+#     old_mean = copy(s.mean)
+#     s.mean .+= (x .- s.mean) ./ s.count
+#     s.var .+= (x .- old_mean) .* (x .- s.mean)
+# end
 
-function normalize!(s::RunningStat, x::AbstractVector)
-    if isempty(s.mean) return x end
-    std = sqrt.(s.var ./ s.count) .+ 1f-8
-    return (x .- s.mean) ./ std
-end
+# function normalize!(s::RunningStat, x::AbstractVector)
+#     if isempty(s.mean) return x end
+#     std = sqrt.(s.var ./ s.count) .+ 1f-8
+#     return (x .- s.mean) ./ std
+# end
 
-function normalize!(s::RunningStat, x::AbstractMatrix)
-    if isempty(s.mean) return x end
-    std = sqrt.(s.var ./ s.count) .+ 1f-8
-    return (x .- s.mean) ./ std
-end
+# function normalize!(s::RunningStat, x::AbstractMatrix)
+#     if isempty(s.mean) return x end
+#     std = sqrt.(s.var ./ s.count) .+ 1f-8
+#     return (x .- s.mean) ./ std
+# end
 
 """
     calculate_advantage_coefficients(T::Int, γ::Float32, λ::Float32)
@@ -66,7 +66,7 @@ mutable struct PPO{G <: AbstractAction} <: AbstractAlgorithm
     c2::Float32 # to weight the entropy objective relative to the clipped objective
     sync_frequency::Int # the number of learning interations to carry out between each synchronisation from central model to workers
     advantage_coefficients::Vector{Float32} # Holds advantage coefficients for the algorithm.
-    obs_normalizer::RunningStat # Running statistics for observation normalization
+    # obs_normalizer::RunningStat # Running statistics for observation normalization
     # debug variables
     average_policy_loss::Vector{Float32}
     average_value_loss::Vector{Float32}
@@ -86,7 +86,7 @@ mutable struct PPO{G <: AbstractAction} <: AbstractAlgorithm
         
         advantage_coefficients = calculate_advantage_coefficients(T, γ_f32, λ_f32)
         
-        new{G}(N, T, K, agent, wrkrs, batch_size, γ_f32, λ_f32, ϵ_f32, c1_f32, c2_f32, sync_frequency, advantage_coefficients, RunningStat(),
+        new{G}(N, T, K, agent, wrkrs, batch_size, γ_f32, λ_f32, ϵ_f32, c1_f32, c2_f32, sync_frequency, advantage_coefficients,
               Vector{Float32}(), Vector{Float32}(), Vector{Float32}(), Vector{Float32}(), Vector{Float32}(), Vector{Float32}())
     end
 end
@@ -185,7 +185,7 @@ function gradient_calculation_and_update!(alg::PPO{DiscreteAct}, agent::Standard
         r = new_probs ./ old_probs
         clamped_r = clamp.(r, 1 - alg.ϵ, 1 + alg.ϵ)
         L_CLIP = mean(min.(r .* batch_advantages, clamped_r .* batch_advantages))
-        entropy = -1 * mean(sum(action_probs .* log.(action_probs), dims=1))
+        entropy = -1 * mean(sum(action_probs .* log.(action_probs .+ 1f-10), dims=1))
         return -1 * L_CLIP - alg.c2 * entropy
     end
     # define value loss function
@@ -238,7 +238,7 @@ function gradient_calculation_and_update!(alg::PPO{DiscreteAct}, agent::Combined
         r = new_probs ./ old_probs
         clamped_r = clamp.(r, 1 - alg.ϵ, 1 + alg.ϵ)
         L_CLIP = mean(min.(r .* batch_advantages, clamped_r .* batch_advantages))
-        entropy = -1 * mean(sum(action_probs .* log.(action_probs), dims=1))
+        entropy = -1 * mean(sum(action_probs .* log.(action_probs .+ 1f-10), dims=1))
         return alg.c1 * L_q_learning - L_CLIP - alg.c2 * entropy
     end
     # get combined and critic gradients
@@ -263,7 +263,7 @@ function gradient_calculation_and_update!(alg::PPO{ContinuousAct}, agent::Standa
         r = exp.(new_log_probs .- old_log_probs)
         clamped_r = clamp.(r, 1 - alg.ϵ, 1 + alg.ϵ)
         L_CLIP = mean(min.(r .* batch_advantages, clamped_r .* batch_advantages))     
-        entropy = mean(0.5f0 .* (log.(2f0 * π .* σ .^ 2) .+ 1.0f0)) # Closed-form entropy for Gaussian
+        entropy = mean(0.5f0 .* (log.(2f0 * π .* σ .^ 2 .+ 1f-10) .+ 1.0f0)) # Closed-form entropy for Gaussian
         return -1 * L_CLIP - alg.c2 * entropy
     end
     # define value loss function
@@ -295,7 +295,7 @@ function gradient_calculation_and_update!(alg::PPO{ContinuousAct}, agent::Combin
         clamped_r = clamp.(r, 1 - alg.ϵ, 1 + alg.ϵ)
         L_CLIP = mean(min.(r .* batch_advantages, clamped_r .* batch_advantages))
         L_value_loss = Flux.Losses.mse(batch_bellman_targets, state_values)
-        entropy = mean(0.5f0 .* (log.(2f0 * π .* σ .^ 2) .+ 1.0f0)) # Closed-form entropy for Gaussian
+        entropy = mean(0.5f0 .* (log.(2f0 * π .* σ .^ 2 .+ 1f-10) .+ 1.0f0)) # Closed-form entropy for Gaussian
         return alg.c1 * L_value_loss - L_CLIP - alg.c2 * entropy
     end
     # get combined and critic gradients
@@ -325,7 +325,7 @@ function gradient_calculation_and_update!(alg::PPO{MultiContinuousAct}, agent::S
         L_CLIP = mean(min.(r .* batch_advantages, clamped_r .* batch_advantages))
         
         # Entropy bonus
-        entropy = mean(sum(0.5f0 .* (log.(2f0 * π .* σ .^ 2) .+ 1.0f0), dims=1))
+        entropy = mean(sum(0.5f0 .* (log.(2f0 * π .* σ .^ 2 .+ 1f-10) .+ 1.0f0), dims=1))
         
         return -L_CLIP - alg.c2 * entropy
     end
@@ -362,7 +362,7 @@ function gradient_calculation_and_update!(alg::PPO{MultiContinuousAct}, agent::C
         L_value_loss = Flux.Losses.mse(batch_bellman_targets, dropdims(state_values, dims=1))
         
         # Entropy bonus
-        entropy = mean(sum(0.5f0 .* (log.(2f0 * π .* σ .^ 2) .+ 1.0f0), dims=1)) # Closed-form entropy for Gaussian
+        entropy = mean(sum(0.5f0 .* (log.(2f0 * π .* σ .^ 2 .+ 1f-10) .+ 1.0f0), dims=1)) # Closed-form entropy for Gaussian
         return alg.c1 * L_value_loss - L_CLIP  - alg.c2 *entropy
     end
     # get combined and critic gradients
@@ -401,7 +401,7 @@ function gradient_calculation_and_update!(alg::PPO{MultiDiscreteAct}, agent::Sta
         r = new_probs ./ old_probs
         clamped_r = clamp.(r, 1 - alg.ϵ, 1 + alg.ϵ)
         L_CLIP = mean(min.(r .* batch_advantages, clamped_r .* batch_advantages))
-        entropy = -1 * mean(sum(action_probs .* log.(action_probs), dims=1))
+        entropy = -1 * mean(sum(action_probs .* log.(action_probs .+ 1f-10), dims=1))
         return -1 * L_CLIP - alg.c2 * entropy
     end
 
@@ -441,7 +441,7 @@ function gradient_calculation_and_update!(alg::PPO{MultiDiscreteAct}, agent::Com
         r = new_probs ./ old_probs
         clamped_r = clamp.(r, 1 - alg.ϵ, 1 + alg.ϵ)
         L_CLIP = mean(min.(r .* batch_advantages, clamped_r .* batch_advantages))
-        entropy = -1 * mean(sum(action_probs .* log.(action_probs), dims=1))
+        entropy = -1 * mean(sum(action_probs .* log.(action_probs .+ 1f-10), dims=1))
         return alg.c1 * L_q_learning - L_CLIP - alg.c2 * entropy
     end
 
@@ -457,7 +457,7 @@ function collect_trajectory_segment!(env::E, agent::A, info::Dict{Symbol, Any}; 
     advantage_coefficients::Vector{Float32} = info[:advantage_coefficients] # Advantage coefficients for GAE
     action_type = info[:action_type] # Action type
     algtype = info[:algtype] # Algorithm type
-    obs_normalizer::RunningStat = info[:obs_normalizer] # For online whitening
+    # obs_normalizer::RunningStat = info[:obs_normalizer] # For online whitening
 
     # initialize vectors to store all the transitions encountered
     local_segment_count = 0 # This keeps an internal count on the worker as to which step we are at
@@ -480,18 +480,12 @@ function collect_trajectory_segment!(env::E, agent::A, info::Dict{Symbol, Any}; 
             state = env.state
         end
         while env.terminal == false && local_segment_count < T 
-            # STABILITY FIX: Update and Normalize observation
-            update!(obs_normalizer, state)
-            norm_state = normalize!(obs_normalizer, state)
 
-            action, state_value, probs = get_action(algtype, agent, norm_state; random_policy=random_policy)
+            action, state_value, probs = get_action(algtype, agent, state; random_policy=random_policy)
             
             new_state, reward, terminal = step!(env, action)
-            
-            # Use normalized state for value estimation of next state too
-            update!(obs_normalizer, new_state)
-            norm_new_state = normalize!(obs_normalizer, new_state)
-            _, next_state_value, _ = get_action(algtype, agent, norm_new_state)
+
+            _, next_state_value, _ = get_action(algtype, agent, new_state)
             
             target = reward .+ (1 .- Int.(terminal)) .* γ .* next_state_value
             
@@ -515,11 +509,11 @@ function collect_trajectory_segment!(env::E, agent::A, info::Dict{Symbol, Any}; 
     gae = 0.0f0
     γλ = γ * info[:λ]
     for t in T:-1:1
-        gae = all_errors[t] + γλ * gae
-        all_advantages[t] = gae
-        if all_terminals[t] # If this was an episode end, reset GAE for the previous transition
+        if all_terminals[t]
             gae = 0.0f0
         end
+        gae = all_errors[t] + γλ * gae
+        all_advantages[t] = gae
     end
     
     return trajectory_states, trajectory_actions, trajectory_probabilities, all_advantages, all_targets, all_errors
@@ -528,8 +522,7 @@ end
 function get_trajectories!(alg::PPO{G}, env::E; random_policy::Bool=false) where {E <: AbstractEnv, G <: AbstractAction}
     info = Dict{Symbol, Any}(:T => alg.T, 
             :γ => alg.γ, :λ => alg.λ, :advantage_coefficients => alg.advantage_coefficients, 
-            :action_type => G, :algtype => typeof(alg),
-            :obs_normalizer => alg.obs_normalizer)
+            :action_type => G, :algtype => typeof(alg))
 
     agents = alg.worker_agents # get agents from algorithm
 
@@ -548,8 +541,12 @@ function get_trajectories!(alg::PPO{G}, env::E; random_policy::Bool=false) where
     end
     
     results = fetch.(futures)
-    final_results = vcat(results...)  
-    all_states, all_actions, all_probabilities, all_advantages, all_targets, all_errors = unzip(final_results)
+    all_states = vcat([r[1] for r in results]...)
+    all_actions = vcat([r[2] for r in results]...)
+    all_probabilities = vcat([r[3] for r in results]...)
+    all_advantages = vcat([r[4] for r in results]...)
+    all_targets = vcat([r[5] for r in results]...)
+    all_errors = vcat([r[6] for r in results]...)
     return all_states, all_actions, all_probabilities, all_advantages, all_targets, all_errors
 end
 

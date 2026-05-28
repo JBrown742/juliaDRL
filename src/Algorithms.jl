@@ -20,22 +20,12 @@ using ..juliaDRL.Agents
 
 
 export
-    AbstractExperience, 
-    AbstractBuffer,
     AbstractAlgorithm,
-
-    # Import RL related Algorithm functionality and types
-    ### Alg functions
-    train!,
-    validation_episode!,
-
-    ### API
-    learn,
-    visualise_learning,
-
-    ## PPO 
     PPO,
-    get_action
+    learn,
+    get_action,
+    validation_episode!,
+    visualise_learning
 
 
 include("./Algorithms/MasterAlgorithm.jl")
