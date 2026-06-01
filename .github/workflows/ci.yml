@@ -1,0 +1,58 @@
+name: CI
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - '1.10'
+          - '1.11'
+        os:
+          - ubuntu-latest
+        arch:
+          - x64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+          arch: ${{ matrix.arch }}
+      - uses: julia-actions/cache@v2
+      
+      # Set up Python for PyCall and Gymnasium
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install gymnasium[box2d] swig
+      
+      - name: Build juliaDRL
+        run: |
+          julia --project=. -e 'using Pkg; Pkg.build("PyCall"); Pkg.precompile()'
+        env:
+          PYTHON: python
+
+      - name: Run Unit Tests
+        uses: julia-actions/julia-runtest@v1
+        with:
+          project: '.'
+
+      - name: Run Integration Learning Tests (ILTs)
+        run: |
+          julia --project=. -e 'using Pkg; Pkg.instantiate(); include("test/run_ilts.jl")'
+        env:
+          PYTHON: python

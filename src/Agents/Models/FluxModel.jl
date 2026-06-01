@@ -1,29 +1,32 @@
 struct FluxModel{C} <: AbstractModel
-    model::C
-    optimizer::Union{AbstractRule, Nothing}
-    _optimizer_state::Union{NamedTuple, Nothing}
+    # An abstract wrapper struct for any Flux compatible model
+    model::C # The Flux Model object itself
+    optimizer::Union{AbstractRule, Nothing} # The optimizer to use for training
+    _optimizer_state::Union{NamedTuple, Nothing} # private attribute for storing optimizer state
     
-    function FluxModel(model::C, optimizer::O) where {C, O <: AbstractRule}
+    function FluxModel(model::C, optimizer::O) where {C, O <: AbstractRule} # Constructor dispatch for when optimizer defined.
         return new{C}(model, optimizer, Flux.setup(optimizer, model))
     end
     
-    function FluxModel(model::C) where {C}
+    function FluxModel(model::C) where {C} # constructor dispatch for when no optimizer defined. Used for inference in certain cases.
         return new{C}(model, nothing, nothing)
     end
 end
 
-# The "Seamless" Forward Pass
 function (m::FluxModel)(x::AbstractArray)
-    # If the input is a vector, it's a single observation; add batch dimension.
-    # If it's a matrix or higher, it's already a batch or high-D observation; pass through.
+    # If the input is a vector, it's a single observation so we need to add a batch dimension.
+    # If it's a matrix or higher, it's already a batch or high-D observation so we can pass through.
     res = if ndims(x) == 1
         m.model(reshape(x, :, 1))
     else
         m.model(x)
     end
     
-    # SAFETY FIX: Clamp outputs to prevent NaN/Inf propagation to simulations
-    # This is critical for physical simulations like Box2D (BipedalWalker)
+    # Safety fix: Clamp outputs to prevent NaN/Inf propagation to simulations
+    # This is critical for physical simulations like Box2D (BipedalWalker). 
+    # This is a hack, however the model should be receiving normalised observations
+    # so this should simply act as a fall-back safety mechanism in the case that the 
+    # environment has no static normalisation and running normalisation is switched off.
     if res isa AbstractArray
         return clamp.(res, -100.0f0, 100.0f0)
     elseif res isa Tuple
@@ -35,7 +38,7 @@ end
 
 # This dispatch handles a Vector of observations by using idiomatic Flux batching
 function (m::FluxModel)(x::Vector{<:AbstractArray})
-    # Flux.batch is the industry standard. It handles N-D tensors automatically.
+    # Flux.batch handles N-D tensors automatically.
     return m.model(Flux.batch(x))
 end
 
@@ -46,7 +49,7 @@ function (m::FluxModel)(x::Vector{T}) where {T <: AbstractObservation}
     return m.model(Flux.batch(x))
 end
 
-Functors.@functor FluxModel
+Functors.@functor FluxModel # makes the model directly callable.
 
 function save_model(m::FluxModel, save_dir::String; model_info::String="")
     if !isdir(save_dir)

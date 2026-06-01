@@ -1,8 +1,7 @@
 
 # ------------ get_actions functions ------- #
-
 # ------------------------  Unambiguous entry-point dispatches ----------------------- #
-
+# Discrete
 function get_action(::Type{PPO{DiscreteAct}}, agent::A, obs_or_env; det=false, random_policy=false) where {A <: AbstractAgent}
     if obs_or_env isa AbstractEnv
         mask = hasfield(typeof(obs_or_env), :action_mask) ? obs_or_env.action_mask : nothing
@@ -11,12 +10,12 @@ function get_action(::Type{PPO{DiscreteAct}}, agent::A, obs_or_env; det=false, r
         return _get_action_discrete(agent, obs_or_env; det=det, random_policy=random_policy, mask=nothing)
     end
 end
-
+# Continuous
 function get_action(::Type{PPO{ContinuousAct}}, agent::A, obs_or_env; det=false, random_policy=false) where {A <: AbstractAgent}
     obs = obs_or_env isa AbstractEnv ? obs_or_env.state : obs_or_env
     return _get_action_continuous(agent, obs; det=det, random_policy=random_policy)
 end
-
+# MultiDiscrete
 function get_action(::Type{PPO{MultiDiscreteAct}}, agent::A, obs_or_env; det=false, random_policy=false) where {A <: AbstractAgent}
     if obs_or_env isa AbstractEnv
         mask = hasfield(typeof(obs_or_env), :action_mask) ? obs_or_env.action_mask : nothing
@@ -25,14 +24,13 @@ function get_action(::Type{PPO{MultiDiscreteAct}}, agent::A, obs_or_env; det=fal
         return _get_action_multidiscrete(agent, obs_or_env; det=det, random_policy=random_policy, mask=nothing)
     end
 end
-
+# MultiContinuous
 function get_action(::Type{PPO{MultiContinuousAct}}, agent::A, obs_or_env; det=false, random_policy=false) where {A <: AbstractAgent}
     obs = obs_or_env isa AbstractEnv ? obs_or_env.state : obs_or_env
     return _get_action_multicontinuous(agent, obs; det=det, random_policy=random_policy)
 end
 
 ## ---------------------------- Internal Core Logic (Type-Stable) ---------------------------- ###
-
 # DISCRETE
 function _get_action_discrete(agent::CombinedActorCritic, obs; det=false, random_policy=false, mask=nothing)
     outputs, value = agent.combined_model(obs)
@@ -44,7 +42,6 @@ function _get_action_discrete(agent::CombinedActorCritic, obs; det=false, random
     action = det ? argmax(ws) : sample(indices, Weights(ws))
     return action, value, ws
 end
-
 function _get_action_discrete(agent::StandardActorCritic, obs; det=false, random_policy=false, mask=nothing)
     outputs = agent.actor_model(obs)
     value = agent.critic_model(obs)
@@ -56,69 +53,69 @@ function _get_action_discrete(agent::StandardActorCritic, obs; det=false, random
     action = det ? argmax(ws) : sample(indices, Weights(ws))
     return action, value, ws
 end
-
+# CONTINUOUS
 function _get_action_continuous(agent::StandardActorCritic, obs; det=false, random_policy=false)
-    μ_raw, log_σ_raw = agent.actor_model(obs)
+    α_raw, β_raw = agent.actor_model(obs)
     value = agent.critic_model(obs)
-    # STABILITY FIX: Clamp log_sigma to a reasonable range
-    log_σ = clamp.(log_σ_raw, -2.0f0, 0.0f0)
-    σ = exp.(log_σ)
-    μ = μ_raw
+    α = Flux.softplus.(α_raw) .+ 1.0f0 
+    β = Flux.softplus.(β_raw) .+ 1.0f0
+    dist = Beta(α[1], β[1])
     if det
-        action = Float32.(μ)
+        u = α[1] / (α[1] + β[1]) # Stable Mean
     elseif random_policy
-        action = Float32.(rand(Uniform(-1, 1), length(σ)))
+        u = rand(Float32)
     else
-        action = Float32.(μ .+ σ .* randn())
+        u = rand(dist)
     end
-    return action[1], value[1], log_gauss_pdf(action[1], μ[1], σ[1])
+    action = 2.0f0 * u - 1.0f0 # Scale to [-1, 1] this is an arbitrary design choice but one that should be well documented and consistent.
+    return action, value[1], logpdf(dist, u)
 end
-
 function _get_action_continuous(agent::CombinedActorCritic, obs; det=false, random_policy=false)
-    μ_raw, log_σ_raw, value = agent.combined_model(obs)
-    log_σ = clamp.(log_σ_raw, -2.0f0, 0.0f0)
-    σ = exp.(log_σ)
-    μ = μ_raw # Squash mean
+    α_raw, β_raw, value = agent.combined_model(obs)
+    α = Flux.softplus.(α_raw) .+ 1.0f0
+    β = Flux.softplus.(β_raw) .+ 1.0f0
+    dist = Beta(α[1], β[1])
     if det
-        action = Float32.(μ)
+        u = α[1] / (α[1] + β[1]) # Stable Mean
     elseif random_policy
-        action = Float32.(rand(Uniform(-1, 1), length(σ)))
-    else    
-        action = Float32.(μ .+ σ .* randn())
+        u = rand(Float32)
+    else
+        u = rand(dist)
     end
-    return action[1], value[1], log_gauss_pdf(action[1], μ[1], σ[1])
+    action = 2.0f0 * u - 1.0f0
+    return action, value[1], logpdf(dist, u)
 end
-
 # MULTI-CONTINUOUS
 function _get_action_multicontinuous(agent::StandardActorCritic, obs; det=false, random_policy=false)
-    μ_raw_vec, log_σ_raw_vec = dropdims.(agent.actor_model(obs), dims=2)
+    α_raw_vec, β_raw_vec = dropdims.(agent.actor_model(obs), dims=2)
     value = agent.critic_model(obs)
-    log_σ_vec = clamp.(log_σ_raw_vec, -2.0f0, 0.0f0)
-    σ_vec = exp.(log_σ_vec)
-    μ_vec = μ_raw_vec # Squash mean
+    α_vec = Flux.softplus.(α_raw_vec) .+ 1.0f0
+    β_vec = Flux.softplus.(β_raw_vec) .+ 1.0f0
+    dists = Beta.(α_vec, β_vec)
     if det
-        action_vec = Float32.(μ_vec)
+        u_vec = α_vec ./ (α_vec .+ β_vec)
     elseif random_policy
-        action_vec = Float32.(rand(Uniform(-1, 1), length(σ_vec)))
+        u_vec = rand(Float32, length(α_vec))
     else
-        action_vec = Float32.(μ_vec .+ σ_vec .* randn(length(σ_vec)))
+        u_vec = Float32.(rand.(dists))
     end
-    return action_vec, value[1], log_gauss_pdf_multi(action_vec, μ_vec, σ_vec)
+    action_vec = 2.0f0 .* u_vec .- 1.0f0
+    return action_vec, value[1], sum(logpdf.(dists, u_vec))
 end
-
 function _get_action_multicontinuous(agent::CombinedActorCritic, obs; det=false, random_policy=false)
-    μ_raw_vec, log_σ_raw_vec, value = dropdims.(agent.combined_model(obs), dims=2)
-    log_σ_vec = clamp.(log_σ_raw_vec, -2.0f0, 0.0f0)
-    σ_vec = exp.(log_σ_vec)
-    μ_vec = μ_raw_vec # Squash mean
+    α_raw_vec, β_raw_vec, value = dropdims.(agent.combined_model(obs), dims=2)
+    α_vec = Flux.softplus.(α_raw_vec) .+ 1.0f0
+    β_vec = Flux.softplus.(β_raw_vec) .+ 1.0f0
+    dists = Beta.(α_vec, β_vec)
     if det
-        action_vec = Float32.(μ_vec)
+        u_vec = α_vec ./ (α_vec .+ β_vec)
     elseif random_policy
-        action_vec = Float32.(rand(Uniform(-1, 1), length(σ_vec)))
+        u_vec = rand(Float32, length(α_vec))
     else
-        action_vec = Float32.(μ_vec .+ σ_vec .* randn(length(σ_vec)))
+        u_vec = Float32.(rand.(dists))
     end
-    return action_vec, value[1], log_gauss_pdf_multi(action_vec, μ_vec, σ_vec)
+    action_vec = 2.0f0 .* u_vec .- 1.0f0
+    return action_vec, value[1], sum(logpdf.(dists, u_vec))
 end
 
 # MULTI-DISCRETE
@@ -126,7 +123,9 @@ function _get_action_multidiscrete(agent::StandardActorCritic, obs; det=false, r
     outputs = agent.actor_model(obs)
     value = agent.critic_model(obs)
     
-    # We assume equal sized heads for now (DeepMind Standard: should be configurable)
+    # We assume equal sized heads for now, i.e each action 
+    # dimension has the same number of action options.
+    # This should really be configurable/
     # For ParticleChase: 6 outputs -> 2 heads of size 3
     num_heads = 2
     head_size = Int(length(outputs) / num_heads)
@@ -171,28 +170,15 @@ end
 
 # ---------------------------- functions for calculating the log probability -------------------- #
 
-function log_gauss_pdf(x::R, μ::R, σ::R=0.05f0) where {R <: Real}
-    return -log(σ) - log(sqrt(2f0 * π))  - 0.5f0 * (((x - μ)/σ) ^ 2) 
+function beta_logpdf(α, β, u)
+    # logpdf(Beta(α, β), u) = (α-1)*log(u) + (β-1)*log(1-u) - lbeta(α, β)
+    # Clip u to avoid log(0)
+    u_clipped = clamp.(u, 1f-6, 1f0 - 1f-6)
+    return (α .- 1.0f0) .* log.(u_clipped) .+ (β .- 1.0f0) .* log.(1.0f0 .- u_clipped) .- logbeta.(α, β)
 end
 
-function log_gauss_pdf(x::Vector{R}, μ::Vector{R}, σ::Vector{R}) where {R <: Real}
-    return log_gauss_pdf.(x, μ, σ)
-end
-
-function log_gauss_pdf_multi(x::Vector{R}, μ::Vector{R}, σ::Vector{R}) where {R <: Real}
-    vals = log_gauss_pdf.(x, μ, σ)
-    return sum(vals)[1] 
-end
-
-function log_gauss_pdf_multi(x::Vector{Vector{R}}, μ::Matrix{R}, σ::Matrix{R}) where {R <: Real}
-    x_mat = hcat(x...)
-    vals = log_gauss_pdf.(x_mat, μ, σ)
-    return dropdims(sum(vals, dims=1), dims=1)
-end
-
-function log_gauss_pdf_multi(x::Matrix{R}, μ::Matrix{R}, σ::Matrix{R}) where {R <: Real}
-    vals = log_gauss_pdf.(x, μ, σ)
-    return dropdims(sum(vals, dims=1), dims=1)
+function beta_entropy(α, β)
+    return lbeta(α, β) - (α - 1f0) * digamma(α) - (β - 1f0) * digamma(β) + (α + β - 2f0) * digamma(α + β)
 end
 
 # ------ functions for updating the actor learners by copying the centralized model --------------------- #
@@ -225,13 +211,18 @@ function unzip(a; dims = 1)
 end
 
 function masked_probabilities(mask::Array{Float32}, outputs::Array{Float32})
+    # Given an action mask in the case of discrete actions with state dependent
+    # action spaces, mask out those forbidden actions.
     # Add small epsilon for numerical stability
     weights = softmax(mask .+ outputs; dims = 1) .+ 1f-10
     # Re-normalize
     return weights ./ sum(weights, dims=1)
 end
 
-function infer_mask(probabilities::Vector{Float32})
+function infer_mask(probabilities::AbstractVector{Float32})
+    # given a probability infer the mask used. This might
+    # define an over complete mask if a model learns to 
+    # completely zero certain actions itself. Unlikely
     idxs = findall(iszero, probabilities)
     N = length(probabilities)
     mask = zeros(Float32, N) 

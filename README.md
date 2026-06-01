@@ -57,14 +57,14 @@ learn(env, alg; training_iters=100)
 
 ## 📈 Performance Benchmarks
 
-Our HPC-optimized implementation achieves significant speedups over naive Julia implementations by:
+A HPC-optimized implementation of PPO. Some key drivers of performance include:
 1. Eliminating splatting overhead in batch preparation.
 2. Hoisting matrix concatenations out of the gradient inner loop.
 3. Leveraging linear-time advantage estimation.
 
 ## 🧪 Verification & Integration Learning Tests (ILTs)
 
-At DeepMind, we distinguish between unit tests (which verify code correctness) and **Integration Learning Tests (ILTs)**, which verify that the agent actually *learns*. This library includes a suite of ILTs to ensure algorithmic convergence across all supported action spaces.
+The package implements both unit tests (which verify code correctness) and **Integration Learning Tests (ILTs)**, which verify that the agent actually *learns*. This library includes a suite of ILTs to ensure algorithmic convergence across all supported action spaces.
 
 | Test Script | Action Space | Environment | Success Metric |
 | :--- | :--- | :--- | :--- |
@@ -87,5 +87,7 @@ To run unit tests:
 julia --project test/runtests.jl
 ```
 
+The intention here is to use both the unit tests and ILTs to confirm the current learning stablity of the implementation for each of the four supported action spaces. These will be run by Github Actions on each PR to ensure breaking bugs aren't introduced into the stable develop branch.
+
 ---
-*Developed by Jonathon Brown - PhD in Theoretical Physics & ML Engineer.*
+*Developed by Jonathon Brown -jonathonbrown742@gmail.com*

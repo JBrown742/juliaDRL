@@ -47,7 +47,7 @@ function clone(env::MyEnv)
 end
 ```
 
-## 🚀 The DeepMind Standard: Best Practices
+## 🚀 Best Practices
 
 1. **Type Homogeneity:** All tensors must be `Float32`. Convert `PyCall` outputs immediately.
 2. **Zero-Allocation Inner Loops:** Avoid `cat`, `vcat`, or `reshape` inside `step!` if possible.

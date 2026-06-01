@@ -23,33 +23,23 @@ function learn(env::E, alg::PPO;
     reset!(env)
     
     for i in 1:training_iters 
-        # 1. Collect trajectories (normalized)
+        # Collect trajectories (normalized)
         trajectories = get_trajectories!(alg, env, random_policy=random_policy)
         
-        # 2. Extract and Normalize states for training
+        # Extract and Normalize states for training
         states, actions, probs, advantages, targets, errors = trajectories
         
-        # STABILITY FIX: Reward Scaling
-        # Large negative rewards in BipedalWalker can cause exploding gradients in the value function
-        # scaled_targets = targets .* 1.0f0
-        # scaled_errors = errors .* 1.0f0
-        # scaled_advantages = advantages .* 1.0f0
-
-        # # Update normalizer with the whole batch
-        # for s in states
-        #     update!(alg.obs_normalizer, s)
-        # end
+        # STABILITY FIX: Update normalizer with the whole batch
+        for s in states
+            update!(alg.obs_normalizer, s)
+        end
         
-        # # STABILITY FIX: Update normalizer with the batch BEFORE training
-        # for s in states
-        #     update!(alg.obs_normalizer, s)
-        # end
         # Normalize states for training
-        # norm_states = [normalize!(alg.obs_normalizer, s) for s in states]
+        norm_states = [normalize(alg.obs_normalizer, s) for s in states]
         
-        # 3. Update our centralization model
+        # Update our centralization model
         try
-            train!(alg, states, actions, probs, advantages, targets, errors)
+            train!(alg, norm_states, actions, probs, advantages, targets, errors)
         catch e
             println("Warning: Training step failed (likely NaN). Skipping. Error: ", e)
         end
@@ -66,7 +56,9 @@ function learn(env::E, alg::PPO;
             
             if reward_av > best_reward
                 best_reward = reward_av
-                save_agent(alg.central_agent, agent_dir; agent_info="iter_$(i)")
+                agent_save_path = save_agent(alg.central_agent, agent_dir; agent_info="iter_$(i)")
+                # Save normalizer state in the same directory
+                serialize(joinpath(agent_save_path, "normalizer.jls"), alg.obs_normalizer)
             end
         end
     end
@@ -95,11 +87,90 @@ function learn(env::E, alg::PPO;
         ylabel!("Avg Reward")
         savefig(joinpath(save_dir, test_name, "learning_curve.png"))
     end
+    return reward_history
 end
 
-function visualise_learning(alg::PPO{G}, env::E, test_dir::String) where {E <: AbstractEnv, G <: AbstractAction}
-    checkpoint_dir = test_dir*"/"*"checkpointed_agents"
-    agent_list = readdir(checkpoint_dir)
-    # Re-enable if needed, but ensure load_agent path is correct
-    println("Visualisation directory: ", checkpoint_dir)
+function _run_visualisation(alg::PPO{G}, env::E, agent_type::Type{A}, agent_dir::String) where {E <: AbstractEnv, G <: AbstractAction, A <: AbstractAgent}
+    println("Visualising agent from: ", agent_dir)
+
+    # 1. Load the agent
+    loaded_agent = load_agent(agent_type, agent_dir)
+
+    # 2. Load the normalizer if it exists
+    norm_path = joinpath(agent_dir, "normalizer.jls")
+    if isfile(norm_path)
+        alg.obs_normalizer = deserialize(norm_path)
+        println("Loaded observation normalizer.")
+    end
+
+    # 3. Prepare environment for rendering
+    renderize!(env)
+
+    # 4. Run a rendered episode
+    try
+        reward = validation_episode!(alg, env, loaded_agent; render=true)
+        println("Visualisation complete. Episode Reward: ", reward)
+        return reward
+    finally
+        # We don't close the env here to allow reuse in loops, 
+        # but we might need to reset it.
+    end
 end
+
+function visualise_learning(alg::PPO{G}, env::E, test_dir::String; agent_type::Type{A}=StandardActorCritic) where {E <: AbstractEnv, G <: AbstractAction, A <: AbstractAgent}
+    checkpoint_dir = joinpath(test_dir, "checkpointed_agents")
+    if !isdir(checkpoint_dir)
+        println("Error: Checkpoint directory not found at ", checkpoint_dir)
+        return
+    end
+
+    agent_list = readdir(checkpoint_dir)
+    if isempty(agent_list)
+        println("Error: No agents found in ", checkpoint_dir)
+        return
+    end
+
+    # Sort by iteration number
+    sorted_agents = sort(agent_list, by=x->begin
+        m = match(r"iter_(\d+)", x)
+        m === nothing ? 0 : parse(Int, m.captures[1])
+    end)
+
+    println("Visualising all $(length(sorted_agents)) checkpoints...")
+
+    try
+        for agent_name in sorted_agents
+            _run_visualisation(alg, env, agent_type, joinpath(checkpoint_dir, agent_name))
+        end
+    finally
+        close!(env)
+    end
+end
+
+function visualise_best(alg::PPO{G}, env::E, test_dir::String; agent_type::Type{A}=StandardActorCritic) where {E <: AbstractEnv, G <: AbstractAction, A <: AbstractAgent}
+    checkpoint_dir = joinpath(test_dir, "checkpointed_agents")
+    if !isdir(checkpoint_dir)
+        println("Error: Checkpoint directory not found at ", checkpoint_dir)
+        return
+    end
+
+    agent_list = readdir(checkpoint_dir)
+    if isempty(agent_list)
+        println("Error: No agents found in ", checkpoint_dir)
+        return
+    end
+
+    # The best agent is the one with the highest iteration index (since we only save on improvement)
+    best_agent_name = sort(agent_list, by=x->begin
+        m = match(r"iter_(\d+)", x)
+        m === nothing ? 0 : parse(Int, m.captures[1])
+    end)[end]
+
+    println("Visualising BEST agent...")
+    try
+        _run_visualisation(alg, env, agent_type, joinpath(checkpoint_dir, best_agent_name))
+    finally
+        close!(env)
+    end
+end
+

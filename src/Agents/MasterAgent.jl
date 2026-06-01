@@ -1,3 +1,12 @@
+# --------------------------------------------------------------- #
+# We define two distinct Agent types within this package.         #
+# Standard actor critic refers to the case where there is a       # 
+# distinct Actor and Critic network and combined is the parameter #
+# sharing case where both the actor and critic share parameters   #
+# until the last few layers. These are then dispatched            #
+# accordingly in the training machinery.                          #
+# --------------------------------------------------------------- #
+
 mutable struct StandardActorCritic <: AbstractAgent
     actor_model::FluxModel
     critic_model::FluxModel
@@ -20,6 +29,9 @@ mutable struct StandardValue <: AbstractAgent
     model::FluxModel
 end
 
+# Dispactches for model saving based on which of the two model paradigms are used.
+# These rely on the save_model functionality dedined in the FluxModel.jl file.
+
 function save_agent(A::StandardActorCritic, save_dir::String; agent_info::String="")
     if !isdir(save_dir)
         mkdir(save_dir)
@@ -37,6 +49,7 @@ function save_agent(A::StandardActorCritic, save_dir::String; agent_info::String
     end
     save_model(actor_model, agent_save_dir; model_info="actor")
     save_model(critic_model, agent_save_dir; model_info="critic")
+    return agent_save_dir
 end
 
 function save_agent(A::CombinedActorCritic, save_dir::String; agent_info::String="")
@@ -54,6 +67,7 @@ function save_agent(A::CombinedActorCritic, save_dir::String; agent_info::String
         mkdir(agent_save_dir)
     end
     save_model(combined_model, agent_save_dir; model_info="combined")
+    return agent_save_dir
 end
 
 function load_agent(::Type{StandardActorCritic}, agent_dir::String)
@@ -67,13 +81,13 @@ function load_agent(::Type{CombinedActorCritic}, agent_dir::String)
     return CombinedActorCritic(combined)
 end
 
+# This is a utility function required to implement split paths in 
+# a combined actor critic architecture. Examples of it's use can be
+# found in each of the example scripts.
 
 struct Split{T}
     paths::T
 end
-  
 Split(paths...) = Split(paths)
-  
 Flux.@layer Split
-  
 (m::Split)(x::AbstractArray) = map(f -> f(x), m.paths)

@@ -3,6 +3,8 @@ module Algorithms
 using Base: rand, SizeUnknown
 using StatsBase
 using Distributions
+using SpecialFunctions
+using Functors
 using Distributed
 using NNlib
 using LinearAlgebra
@@ -25,7 +27,8 @@ export
     learn,
     get_action,
     validation_episode!,
-    visualise_learning
+    visualise_learning,
+    visualise_best
 
 
 include("./Algorithms/MasterAlgorithm.jl")

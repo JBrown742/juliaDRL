@@ -3,6 +3,7 @@ mutable struct Pendulum <: AbstractEnv
     pyenv::PyObject
     state::Vector{Float32}
     terminal::Bool
+    truncated::Bool
     action_type::Type
     action_extent::Tuple{Float32, Float32}
     renderize::Bool
@@ -13,7 +14,7 @@ mutable struct Pendulum <: AbstractEnv
             pe = gym.make("Pendulum-v1");
         end
         obs, info = pe.reset()
-        return new(len, pe, obs, false, Float32, (-2f0, 2f0), render)
+        return new(len, pe, obs, false, false, Float32, (-2f0, 2f0), render)
     end
 end
 function clone(s::Pendulum) return Pendulum(s.episode_length; render=s.renderize) end
@@ -22,8 +23,9 @@ function step!(env::Pendulum, action::Union{Float32, Float64, Vector{Float32}})
     scaled_action = clamp(2.0f0 * u, env.action_extent[1], env.action_extent[2])
     observation, reward, terminated, truncated, info = env.pyenv.step([scaled_action])
     env.state = Float32.(observation)
-    env.terminal = terminated
-    return env.state, Float32(reward), terminated || truncated 
+    env.terminal = terminated || truncated
+    env.truncated = truncated
+    return env.state, Float32(reward), env.terminal 
 end
 function render!(env::Pendulum) env.pyenv.render() end
 function close!(env::Pendulum) env.pyenv.close() end
@@ -31,6 +33,7 @@ function reset!(env::Pendulum)
     (observation, info) = env.pyenv.reset()
     env.state = Float32.(observation)
     env.terminal = false
+    env.truncated = false
     return env.state
 end
 function renderize!(env::Pendulum) env.pyenv = gym.make("Pendulum-v1", render_mode="human"); env.renderize=true end

@@ -3,6 +3,7 @@ mutable struct Cartpole <: AbstractEnv
     pyenv::PyObject
     state::Vector{Float32}
     terminal::Bool
+    truncated::Bool
     actions::Vector{Int}
     action_mask::Vector{Float32}
     renderize::Bool
@@ -13,7 +14,7 @@ mutable struct Cartpole <: AbstractEnv
             pe = gym.make("CartPole-v1");
         end
         obs, info = pe.reset()
-        return new(len, pe, Float32.(obs), false, [0, 1], ones(Float32, 2), render)
+        return new(len, pe, Float32.(obs), false, false, [0, 1], ones(Float32, 2), render)
     end
 end
 
@@ -28,8 +29,9 @@ function step!(env::Cartpole, action::Int)
     act = env.actions[action]
     observation, reward, terminated, truncated, info = env.pyenv.step(act)
     env.state = normalize(observation)
-    env.terminal = terminated
-    return Float32.(env.state), Float32(reward), terminated || truncated
+    env.terminal = terminated || truncated
+    env.truncated = truncated
+    return Float32.(env.state), Float32(reward), env.terminal
 end
 
 
@@ -43,6 +45,7 @@ function reset!(env::Cartpole)
     observation, info = env.pyenv.reset()
     env.state = normalize(observation)
     env.terminal = false
+    env.truncated = false
     return Float32.(env.state)
 end
 

@@ -1,28 +1,35 @@
 using Test
 using juliaDRL
 using Statistics
+using Distributions
 
 @testset "Mathematical Kernels" begin
 
-    @testset "Log-Gaussian PDF" begin
-        # The probability density of N(0, 1) at x=0 is 1/sqrt(2pi)
-        # log(1/sqrt(2pi)) approx -0.9189
-        μ = 0.0f0
-        σ = 1.0f0
-        x = 0.0f0
-        expected = -0.9189385f0
-        @test juliaDRL.Algorithms._get_action_continuous !== nothing # Ensure internal functions are accessible
+    @testset "Beta Distribution Kernels" begin
+        # Test Beta Log-PDF
+        α = 2.0f0
+        β = 5.0f0
+        u = 0.3f0
         
-        # Access the kernel through the exported module structure
-        # (Assuming it's available in Algorithms)
-        res = juliaDRL.Algorithms.log_gauss_pdf(x, μ, σ)
-        @test res ≈ expected atol=1f-5
+        # Reference value from Distributions.jl
+        d = Beta(α, β)
+        expected_lp = logpdf(d, u)
+        
+        # Test our closed-form implementation
+        res_lp = juliaDRL.Algorithms.beta_logpdf(α, β, u)
+        @test res_lp ≈ expected_lp atol=1f-5
         
         # Test vectorization
-        xs = [0.0f0, 1.0f0]
-        res_vec = juliaDRL.Algorithms.log_gauss_pdf(xs, [μ, μ], [σ, σ])
-        @test length(res_vec) == 2
-        @test res_vec[1] ≈ expected atol=1f-5
+        us = [0.1f0, 0.5f0, 0.9f0]
+        res_vec = juliaDRL.Algorithms.beta_logpdf([α, α, α], [β, β, β], us)
+        @test length(res_vec) == 3
+        @test res_vec ≈ logpdf.(d, us) atol=1f-5
+        
+        # Test Beta Entropy
+        # lbeta(α, β) - (α - 1)digamma(α) - (β - 1)digamma(β) + (α + β - 2)digamma(α + β)
+        expected_ent = entropy(d)
+        res_ent = juliaDRL.Algorithms.beta_entropy(α, β)
+        @test res_ent ≈ expected_ent atol=1f-5
     end
 
     @testset "GAE Advantage Coefficients" begin

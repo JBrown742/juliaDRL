@@ -12,7 +12,7 @@ using .Algorithms
 
 # --- Re-exports for a clean External API ---
 
-# 1. Core Types & Structures
+# Core Types & Structures
 export
     AbstractAgent,
     StandardActorCritic,
@@ -20,14 +20,14 @@ export
     FluxModel,
     Split
 
-# 2. Action Types (Multiple Dispatch keys)
+# Action Types (Multiple Dispatch keys)
 export
     DiscreteAct,
     ContinuousAct,
     MultiDiscreteAct,
     MultiContinuousAct
 
-# 3. Environments
+# Environments
 # We export the abstract type and the built-in benchmarks
 export
     AbstractEnv,
@@ -37,15 +37,17 @@ export
     BipedalWalker,
     ParticleChase
 
-# 4. The Training API
+# The Training API
 # The user should primarily interact with 'learn'
 export
     learn,
     PPO,
     get_action,
-    validation_episode!
+    validation_episode!,
+    visualise_learning
 
-# 5. Persistence & Utilities
+
+# Persistence & Utilities
 export
     save_agent,
     load_agent,
