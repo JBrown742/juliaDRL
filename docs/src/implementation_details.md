@@ -1,6 +1,6 @@
 # PPO Implementation Details
 
-This document provides a comprehensive technical overview of the Proximal Policy Optimization (PPO) implementation in `juliaDRL`.
+This document provides a comprehensive technical overview of the Proximal Policy Optimization (PPO) implementation in `ProximalPolicy`.
 
 ## 1. Core Architecture
 

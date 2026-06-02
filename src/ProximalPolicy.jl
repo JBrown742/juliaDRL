@@ -1,4 +1,4 @@
-module juliaDRL
+module ProximalPolicy
 
 # --- Modules ---
 include("Agents.jl")
@@ -54,4 +54,4 @@ export
     save_model,
     load_model
 
-end # module juliaDRL
+end # module ProximalPolicy

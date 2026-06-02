@@ -1,5 +1,5 @@
 using Test
-using juliaDRL
+using ProximalPolicy
 using Statistics
 using Distributions
 
@@ -16,19 +16,19 @@ using Distributions
         expected_lp = logpdf(d, u)
         
         # Test our closed-form implementation
-        res_lp = juliaDRL.Algorithms.beta_logpdf(α, β, u)
+        res_lp = ProximalPolicy.Algorithms.beta_logpdf(α, β, u)
         @test res_lp ≈ expected_lp atol=1f-5
         
         # Test vectorization
         us = [0.1f0, 0.5f0, 0.9f0]
-        res_vec = juliaDRL.Algorithms.beta_logpdf([α, α, α], [β, β, β], us)
+        res_vec = ProximalPolicy.Algorithms.beta_logpdf([α, α, α], [β, β, β], us)
         @test length(res_vec) == 3
         @test res_vec ≈ logpdf.(d, us) atol=1f-5
         
         # Test Beta Entropy
         # lbeta(α, β) - (α - 1)digamma(α) - (β - 1)digamma(β) + (α + β - 2)digamma(α + β)
         expected_ent = entropy(d)
-        res_ent = juliaDRL.Algorithms.beta_entropy(α, β)
+        res_ent = ProximalPolicy.Algorithms.beta_entropy(α, β)
         @test res_ent ≈ expected_ent atol=1f-5
     end
 
@@ -37,7 +37,7 @@ using Distributions
         γ = 0.9f0
         λ = 0.95f0
         # Formula: (gamma * lambda) .^ (0:T)
-        coeffs = juliaDRL.Algorithms.calculate_advantage_coefficients(T, γ, λ)
+        coeffs = ProximalPolicy.Algorithms.calculate_advantage_coefficients(T, γ, λ)
         
         @test length(coeffs) == T + 1
         @test coeffs[1] == 1.0f0 # (gamma * lambda)^0

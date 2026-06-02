@@ -2,7 +2,7 @@ using Distributed
 if nworkers() == 1
     addprocs(3)
 end
-@everywhere using juliaDRL
+@everywhere using ProximalPolicy
 using Flux
 using Flux.Optimisers
 
@@ -50,10 +50,10 @@ else
     alg = PPO(DiscreteAct, nworkers(), 200, 10, agent; batch_size=64, γ=0.99, λ=0.95, ϵ=0.2, c1=0.5, c2=0.01, sync_frequency=1)
 end
 # ------------------------------------------------------- #
-learn(env, alg; training_iters=100, save_dir="/home/johnny/Documents/PersonalCode/juliaDRL/example_scripts/save_data/Cartpole", test_name="PPO_CombinedActorCritic_2", average_window=10)
+learn(env, alg; training_iters=100, save_dir="/home/johnny/Documents/PersonalCode/ProximalPolicy/example_scripts/save_data/Cartpole", test_name="PPO_CombinedActorCritic_2", average_window=10)
 
 # ----------------- Visualisation ------------------ # 
 # To watch the trained agent, uncomment the line below:
 
 
-visualise_learning(alg, env, "/home/johnny/Documents/PersonalCode/juliaDRL/example_scripts/save_data/Cartpole/PPO_CombinedActorCritic_2"; agent_type=CombinedActorCritic)
+visualise_learning(alg, env, "/home/johnny/Documents/PersonalCode/ProximalPolicy/example_scripts/save_data/Cartpole/PPO_CombinedActorCritic_2"; agent_type=CombinedActorCritic)

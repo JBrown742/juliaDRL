@@ -93,20 +93,20 @@ end
 function _run_visualisation(alg::PPO{G}, env::E, agent_type::Type{A}, agent_dir::String) where {E <: AbstractEnv, G <: AbstractAction, A <: AbstractAgent}
     println("Visualising agent from: ", agent_dir)
 
-    # 1. Load the agent
+    # Load the agent
     loaded_agent = load_agent(agent_type, agent_dir)
 
-    # 2. Load the normalizer if it exists
+    # Load the normalizer if it exists
     norm_path = joinpath(agent_dir, "normalizer.jls")
     if isfile(norm_path)
         alg.obs_normalizer = deserialize(norm_path)
         println("Loaded observation normalizer.")
     end
 
-    # 3. Prepare environment for rendering
+    # Prepare environment for rendering
     renderize!(env)
 
-    # 4. Run a rendered episode
+    # Run a rendered episode
     try
         reward = validation_episode!(alg, env, loaded_agent; render=true)
         println("Visualisation complete. Episode Reward: ", reward)

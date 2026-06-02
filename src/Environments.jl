@@ -16,7 +16,7 @@ function __init__()
     copy!(gym,  pyimport("gymnasium"))
 end
 
-using ..juliaDRL: AbstractObservation, AbstractAction
+using ..ProximalPolicy: AbstractObservation, AbstractAction
 export
     AbstractEnv, 
 
@@ -42,4 +42,4 @@ include("./Environments/CarRacing.jl")
 include("./Environments/BipedalWalker.jl")
 include("./Environments/ParticleChase.jl")
 
-end # module Models
+end # module Environments

@@ -1,5 +1,5 @@
 using Random
-using juliaDRL
+using ProximalPolicy
 using Test
 using Statistics
 

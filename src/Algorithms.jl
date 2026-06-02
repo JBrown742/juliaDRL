@@ -11,14 +11,13 @@ using LinearAlgebra
 using Flux
 using Shuffle
 using Plots # used for API function
-using JSON # used for API function
 using Random
 using Distributions
 using Serialization
 
 
-using ..juliaDRL.Environments
-using ..juliaDRL.Agents
+using ..ProximalPolicy.Environments
+using ..ProximalPolicy.Agents
 
 
 export

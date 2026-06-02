@@ -2,7 +2,7 @@ using Distributed
 if nworkers() == 1
     addprocs(3)
 end
-@everywhere using juliaDRL
+@everywhere using ProximalPolicy
 using Flux
 
 # ----------------- Pendulum ILT (Continuous) ------------------ # 
@@ -33,9 +33,9 @@ alg = PPO(ContinuousAct, nworkers(), 2048, 10, agent;
 
 # ILT: Run for 50 iterations to verify reward signal improvement
 learn(env, alg; training_iters=50, 
-      save_dir="/home/johnny/Documents/PersonalCode/juliaDRL/test_data/Pendulum", 
+      save_dir="/home/johnny/Documents/PersonalCode/ProximalPolicy/test_data/Pendulum", 
       test_name="ILT_Pendulum")
 
 # ----------------- Visualisation ------------------ # 
 # To watch the trained agent, uncomment the line below:
-# visualise_learning(alg, env, "/home/johnny/Documents/PersonalCode/juliaDRL/test_data/Pendulum/ILT_Pendulum")
+# visualise_learning(alg, env, "/home/johnny/Documents/PersonalCode/ProximalPolicy/test_data/Pendulum/ILT_Pendulum")

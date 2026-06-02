@@ -3,7 +3,7 @@ if nworkers() == 1
     addprocs(3)
 end
 
-@everywhere using juliaDRL
+@everywhere using ProximalPolicy
 using Flux
 using LinearAlgebra
 using Test

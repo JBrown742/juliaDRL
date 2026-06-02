@@ -1,7 +1,8 @@
-# juliaDRL: High-Performance Deep Reinforcement Learning in Julia
+# ProximalPolicy: High-Performance Deep Reinforcement Learning in Julia
 
-[![Julia Version](https://img.shields.io/badge/julia-1.12+-9558B2.svg)](https://julialang.org)
+[![Julia Version](https://img.shields.io/badge/julia-1.10+-9558B2.svg)](https://julialang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Coverage](https://codecov.io/gh/jonathonbrown/ProximalPolicy.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/jonathonbrown/ProximalPolicy.jl)
 
 A high-performance, modular library for Deep Reinforcement Learning (DRL) implemented in Julia. This package is designed for **Research Engineers** who need to bridge the gap between advanced mathematical literature and scalable, compute-efficient infrastructure.
 
@@ -28,12 +29,22 @@ We leverage GAE ([Schulman et al., 2015](https://arxiv.org/abs/1506.02438)) for 
 $$A_t = \delta_t + (\gamma\lambda) A_{t+1}$$
 $$\delta_t = r_t + \gamma V(s_{t+1}) - V(s_t)$$
 
+### Beta Distribution for Constrained Action Spaces
+Unlike standard Gaussian policies that require $tanh$ squashing or aggressive clipping, `ProximalPolicy` leverages the **Beta Distribution** to naturally enforce the $[-1, 1]$ action space. This avoids the "boundary bias" and gradient saturation common in Gaussian-based continuous control.
+
+An action $u \in [0, 1]$ is sampled from a Beta distribution, and then affinely transformed to the target space:
+$$u_t \sim \text{Beta}(\alpha_t, \beta_t)$$
+$$a_t = 2u_t - 1$$
+
+To ensure numerical stability and a unimodal distribution, our implementation enforces $\alpha, \beta > 1$ via a softplus transformation of the network outputs:
+$$\alpha, \beta = \text{softplus}(z) + 1.0$$
+
 ## 🛠️ Usage Example (Cartpole)
 
 The library provides a clean API for training agents. For details on how to add your own custom environments, see our [Environment Design Protocol](docs/Environment_Design.md).
 
 ```julia
-using juliaDRL
+using ProximalPolicy
 using Flux
 
 # 1. Initialize environment

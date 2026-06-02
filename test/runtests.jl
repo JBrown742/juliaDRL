@@ -1,7 +1,7 @@
 using Test
-using juliaDRL
+using ProximalPolicy
 
-@testset "juliaDRL Unit Tests" begin
+@testset "ProximalPolicy Unit Tests" begin
     include("unit/math_kernels.jl")
     include("unit/hpc_utils.jl")
 end

@@ -55,4 +55,4 @@ include("./Agents/Types.jl")
 include("./Agents/Models/FluxModel.jl")
 include("./Agents/MasterAgent.jl")
 
-end # module Models
+end # module Agents

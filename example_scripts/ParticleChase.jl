@@ -2,7 +2,7 @@ using Distributed
 if nworkers() == 1
     addprocs(3)
 end
-@everywhere using juliaDRL
+@everywhere using ProximalPolicy
 using Flux
 using LinearAlgebra
 using Random
@@ -45,9 +45,9 @@ alg = PPO(MultiDiscreteAct, nworkers(), 512, 10, agent;
 
 # ILT: Convergence should be visible within 30-50 iterations.
 learn(env, alg; training_iters=100, 
-      save_dir="/home/johnny/Documents/PersonalCode/juliaDRL/test_data/ParticleChase", 
+      save_dir="/home/johnny/Documents/PersonalCode/ProximalPolicy/test_data/ParticleChase", 
       test_name="ILT_ParticleChase_MultiDiscrete")
 
 # ----------------- Visualisation ------------------ # 
 # To watch the trained agent, uncomment the line below:
-# visualise_learning(alg, env, "/home/johnny/Documents/PersonalCode/juliaDRL/test_data/ParticleChase/ILT_ParticleChase_MultiDiscrete")
+# visualise_learning(alg, env, "/home/johnny/Documents/PersonalCode/ProximalPolicy/test_data/ParticleChase/ILT_ParticleChase_MultiDiscrete")

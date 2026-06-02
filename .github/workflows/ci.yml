@@ -40,7 +40,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install gymnasium[box2d] swig
       
-      - name: Build juliaDRL
+      - name: Build ProximalPolicy
         run: |
           julia --project=. -e 'using Pkg; Pkg.build("PyCall"); Pkg.precompile()'
         env:
@@ -56,3 +56,10 @@ jobs:
           julia --project=. -e 'using Pkg; Pkg.instantiate(); include("test/run_ilts.jl")'
         env:
           PYTHON: python
+
+      - uses: julia-actions/julia-processcoverage@v1
+      - uses: codecov/codecov-action@v5
+        with:
+          files: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false

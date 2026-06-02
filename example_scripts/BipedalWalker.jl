@@ -2,7 +2,7 @@ using Distributed
 if nworkers() == 1
     addprocs(3)
 end
-@everywhere using juliaDRL
+@everywhere using ProximalPolicy
 using Flux
 using LinearAlgebra
 
@@ -45,9 +45,9 @@ alg = PPO(MultiContinuousAct, nworkers(), 1024, 10, agent;
 
 # ILT: Convergence should be visible within 50-80 iterations.
 learn(env, alg; training_iters=200, 
-      save_dir="/home/johnny/Documents/PersonalCode/juliaDRL/example_scripts/save_data/BipedalWalker", 
+      save_dir="/home/johnny/Documents/PersonalCode/ProximalPolicy/example_scripts/save_data/BipedalWalker", 
       test_name="BipedalWalker_test_1")
 
 # ----------------- Visualisation ------------------ # 
 # To watch the trained agent, uncomment the line below:
-visualise_learning(alg, env, "/home/johnny/Documents/PersonalCode/juliaDRL/example_scripts/save_data/BipedalWalker/BipedalWalker_test_1")
+visualise_learning(alg, env, "/home/johnny/Documents/PersonalCode/ProximalPolicy/example_scripts/save_data/BipedalWalker/BipedalWalker_test_1")

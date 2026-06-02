@@ -1,6 +1,6 @@
 # 🏛️ Environment Design Protocol
 
-Every environment in `juliaDRL` must strictly adhere to the `AbstractEnv` contract. This ensures that any model or algorithm can interact with any environment without modification.
+Every environment in `ProximalPolicy` must strictly adhere to the `AbstractEnv` contract. This ensures that any model or algorithm can interact with any environment without modification.
 
 ## 📋 The AbstractEnv Contract
 

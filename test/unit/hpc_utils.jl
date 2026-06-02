@@ -1,5 +1,5 @@
 using Test
-using juliaDRL
+using ProximalPolicy
 
 @testset "HPC Utilities" begin
 
@@ -23,7 +23,7 @@ using juliaDRL
         # states: Vector of 3 vectors
         # actions: Vector of 3 Ints
         # rewards: Vector of 3 Float32s
-        unzipped = juliaDRL.Algorithms.unzip(raw_results)
+        unzipped = ProximalPolicy.Algorithms.unzip(raw_results)
         
         @test length(unzipped) == 3 # states, actions, rewards
         
