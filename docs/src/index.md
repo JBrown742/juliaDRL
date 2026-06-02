@@ -10,7 +10,7 @@ ProximalPolicy is designed for research engineers who need to bridge the gap bet
 
 - **Architectural Separation:** Decoupling of RL algorithms from neural network models.
 - **Multi-Dispatch Core:** Specialized implementations for Discrete, Continuous, and Multi-Continuous action spaces.
-- **HPC Optimized:** Linear-time GAE, zero-copy batching, and distributed support.
+- **Performance Optimized:** Linear-time GAE, zero-copy batching, and distributed support.
 
 ## Installation
 

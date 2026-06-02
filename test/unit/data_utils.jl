@@ -1,7 +1,7 @@
 using Test
 using ProximalPolicy
 
-@testset "Data Utilities" begin
+@testset "Performance Utilities" begin
 
     @testset "Unzip & Flatten Pipeline" begin
         # Mock trajectory data from 2 workers

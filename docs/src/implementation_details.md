@@ -4,7 +4,7 @@ This document provides a comprehensive technical overview of the Proximal Policy
 
 ## 1. Core Architecture
 
-The implementation follows a **Centralized Training, Decentralized Execution (CTDE)** pattern adapted for High-Performance Computing (HPC) environments.
+The implementation follows a **Centralized Training, Decentralized Execution (CTDE)** pattern adapted for performance-oriented environments.
 
 - **Central Agent:** Resides on the master process. It holds the definitive weights and is the only agent updated via backpropagation.
 - **Worker Agents:** Distributed across multiple processes (Julia workers). They are used exclusively for parallel trajectory collection.
