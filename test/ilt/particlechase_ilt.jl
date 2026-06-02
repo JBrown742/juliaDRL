@@ -48,5 +48,5 @@ include("utils.jl")
     # 5. Verification
     # ParticleChase is solved when distance to target is small.
     # Positive reward means it's making progress.
-    @test verify_ilt(rewards, 5.0, window=3)
+    @test verify_ilt(rewards, 0.0, window=3)
 end

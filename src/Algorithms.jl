@@ -1,6 +1,7 @@
 module Algorithms
 
 using Base: rand, SizeUnknown
+using Logging
 using StatsBase
 using Distributions
 using SpecialFunctions

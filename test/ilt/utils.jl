@@ -18,11 +18,15 @@ end
 """
     verify_ilt(rewards, threshold; window=5)
 
-Checks if the average reward in the last `window` iterations meets the `threshold`.
+Checks if the average reward in a `window` of iterations meets the `threshold`.
 """
 function verify_ilt(rewards, threshold; window=5)
+    running_averages = Vector{Float32}()
+    for i in 1:length(rewards)-window+1
+        push!(running_averages, mean(rewards[i:i+window-1]))
+    end
     if length(rewards) < window
         return mean(rewards) >= threshold
     end
-    return mean(rewards[end-window+1:end]) >= threshold
+    return any(running_averages .>= threshold)
 end

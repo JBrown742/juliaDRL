@@ -44,7 +44,7 @@ function learn(env::E, alg::PPO;
         try
             train!(alg, norm_states, actions, probs, advantages, targets, errors)
         catch e
-            println("Warning: Training step failed (likely NaN). Skipping. Error: ", e)
+            @error "Training step failed" exception=(e, catch_backtrace())
         end
         
         if i % alg.sync_frequency == 0
@@ -55,7 +55,7 @@ function learn(env::E, alg::PPO;
         if i % checkpoint_freq == 0
             reward_av = mean([validation_episode!(env, alg) for _ in 1:vals_per_checkpoint])
             push!(reward_history, reward_av)
-            println("Episode $(i):: Average reward is $(reward_av)")
+            @info "Training Progress" iteration=i avg_reward=reward_av
             if ephemeral==false
                 if reward_av > best_reward
                     best_reward = reward_av
@@ -97,7 +97,7 @@ function learn(env::E, alg::PPO;
 end
 
 function _run_visualisation(alg::PPO{G}, env::E, agent_type::Type{A}, agent_dir::String) where {E <: AbstractEnv, G <: AbstractAction, A <: AbstractAgent}
-    println("Visualising agent from: ", agent_dir)
+    @info "Visualising agent" path=agent_dir
 
     # Load the agent
     loaded_agent = load_agent(agent_type, agent_dir)
@@ -106,7 +106,7 @@ function _run_visualisation(alg::PPO{G}, env::E, agent_type::Type{A}, agent_dir:
     norm_path = joinpath(agent_dir, "normalizer.jls")
     if isfile(norm_path)
         alg.obs_normalizer = deserialize(norm_path)
-        println("Loaded observation normalizer.")
+        @debug "Loaded observation normalizer"
     end
 
     # Prepare environment for rendering
@@ -115,7 +115,7 @@ function _run_visualisation(alg::PPO{G}, env::E, agent_type::Type{A}, agent_dir:
     # Run a rendered episode
     try
         reward = validation_episode!(alg, env, loaded_agent; render=true)
-        println("Visualisation complete. Episode Reward: ", reward)
+        @info "Visualisation complete" reward=reward
         return reward
     finally
         # We don't close the env here to allow reuse in loops, 
@@ -126,13 +126,13 @@ end
 function visualise_learning(alg::PPO{G}, env::E, test_dir::String; agent_type::Type{A}=StandardActorCritic) where {E <: AbstractEnv, G <: AbstractAction, A <: AbstractAgent}
     checkpoint_dir = joinpath(test_dir, "checkpointed_agents")
     if !isdir(checkpoint_dir)
-        println("Error: Checkpoint directory not found at ", checkpoint_dir)
+        @error "Checkpoint directory not found" path=checkpoint_dir
         return
     end
 
     agent_list = readdir(checkpoint_dir)
     if isempty(agent_list)
-        println("Error: No agents found in ", checkpoint_dir)
+        @error "No agents found in directory" path=checkpoint_dir
         return
     end
 
@@ -142,7 +142,7 @@ function visualise_learning(alg::PPO{G}, env::E, test_dir::String; agent_type::T
         m === nothing ? 0 : parse(Int, m.captures[1])
     end)
 
-    println("Visualising all $(length(sorted_agents)) checkpoints...")
+    @info "Starting batch visualisation" count=length(sorted_agents)
 
     try
         for agent_name in sorted_agents
@@ -156,13 +156,13 @@ end
 function visualise_best(alg::PPO{G}, env::E, test_dir::String; agent_type::Type{A}=StandardActorCritic) where {E <: AbstractEnv, G <: AbstractAction, A <: AbstractAgent}
     checkpoint_dir = joinpath(test_dir, "checkpointed_agents")
     if !isdir(checkpoint_dir)
-        println("Error: Checkpoint directory not found at ", checkpoint_dir)
+        @error "Checkpoint directory not found" path=checkpoint_dir
         return
     end
 
     agent_list = readdir(checkpoint_dir)
     if isempty(agent_list)
-        println("Error: No agents found in ", checkpoint_dir)
+        @error "No agents found in directory" path=checkpoint_dir
         return
     end
 
@@ -172,7 +172,7 @@ function visualise_best(alg::PPO{G}, env::E, test_dir::String; agent_type::Type{
         m === nothing ? 0 : parse(Int, m.captures[1])
     end)[end]
 
-    println("Visualising BEST agent...")
+    @info "Visualising best agent" name=best_agent_name
     try
         _run_visualisation(alg, env, agent_type, joinpath(checkpoint_dir, best_agent_name))
     finally
