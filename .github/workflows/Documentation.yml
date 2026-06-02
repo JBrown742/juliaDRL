@@ -13,11 +13,28 @@ jobs:
       - uses: julia-actions/setup-julia@v2
         with:
           version: '1'
-      - name: Install dependencies
+      - uses: julia-actions/cache@v2
+
+      # Set up Python for PyCall and Gymnasium
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
         run: |
-          julia --project=docs -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
+          python -m pip install --upgrade pip
+          pip install gymnasium[box2d] swig
+
+      - name: Install Julia dependencies
+        run: |
+          julia --project=docs -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.build("PyCall"); Pkg.instantiate()'
+        env:
+          PYTHON: python
+
       - name: Build and deploy
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
+          PYTHON: python
         run: julia --project=docs docs/make.jl
