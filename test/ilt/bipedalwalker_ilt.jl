@@ -48,7 +48,7 @@ include("utils.jl")
 
     # Run Learning
     # 50 iterations is enough to see the agent stop falling immediately.
-    rewards = learn(env, alg; training_iters=50, test_name="ILT_BipedalWalker")
+    rewards = learn(env, alg; training_iters=50, test_name="tmp/ILT_BipedalWalker")
 
     # ification (Lenient)
     # Random flailing or falling results in ~ -110. 

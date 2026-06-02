@@ -1,3 +1,4 @@
-*/example_data/
+example_scripts/save_data/
+tmp/
 .vscode/
 .dvc/
