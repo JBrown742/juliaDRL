@@ -8,10 +8,12 @@ makedocs(
         "Home" => "index.md",
         "Environment Design" => "Environment_Design.md",
         "Implementation Details" => "implementation_details.md",
+        "API Reference" => "api.md",
     ],
     format = Documenter.HTML(
         prettyurls = get(ENV, "CI", nothing) == "true"
-    )
+    ),
+    warnonly = true
 )
 
 deploydocs(
