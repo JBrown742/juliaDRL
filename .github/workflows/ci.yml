@@ -44,7 +44,7 @@ jobs:
       
       - name: Build ProximalPolicy
         run: |
-          julia --project=. -e 'using Pkg; Pkg.build("PyCall"); Pkg.precompile()'
+          julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.build("PyCall"); Pkg.precompile()'
         env:
           PYTHON: python
 

@@ -46,7 +46,7 @@ include("utils.jl")
               batch_size=64, γ=0.9, λ=0.95, ϵ=0.2, c2=0.001)
 
     # 4. Run Learning
-    rewards = learn(env, alg; training_iters=100, test_name="tmp/ILT_Pendulum")
+    rewards = learn(env, alg; training_iters=100, ephemeral=true)
 
     # 5. Verification
     # Pendulum is considered solved if reward > -400. 
