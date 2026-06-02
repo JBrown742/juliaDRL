@@ -43,7 +43,7 @@ include("utils.jl")
               batch_size=64, γ=0.99, λ=0.95, ϵ=0.2, c2=0.01)
 
     # 4. Run Learning
-    rewards = learn(env, alg; training_iters=100, test_name="tmp/ILT_ParticleChase")
+    rewards = learn(env, alg; training_iters=100, ephemeral=true)
 
     # 5. Verification
     # ParticleChase is solved when distance to target is small.

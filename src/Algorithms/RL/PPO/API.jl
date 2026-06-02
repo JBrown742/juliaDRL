@@ -3,18 +3,21 @@ function learn(env::E, alg::PPO;
     checkpoint_freq=1, vals_per_checkpoint=10, 
     save_dir=pwd(), test_name="test", average_window=2,
     plot_type="max_min",
-    random_policy=false
+    random_policy=false,
+    ephemeral=false
 ) where {E <: AbstractEnv}
     # setup directories
-    if !isdir(save_dir)
-        mkdir(save_dir)
-    end
-    agent_dir = save_dir * "/" * test_name * "/checkpointed_agents"
-    if !isdir(save_dir * "/" * test_name)
-        mkdir(save_dir * "/" * test_name)
-    end
-    if !isdir(agent_dir)
-        mkdir(agent_dir)
+    if ephemeral==false
+        if !isdir(save_dir)
+            mkdir(save_dir)
+        end
+        agent_dir = save_dir * "/" * test_name * "/checkpointed_agents"
+        if !isdir(save_dir * "/" * test_name)
+            mkdir(save_dir * "/" * test_name)
+        end
+        if !isdir(agent_dir)
+            mkdir(agent_dir)
+        end
     end
     info_dict = Dict()
     reward_history = Vector{Float32}()
@@ -53,12 +56,13 @@ function learn(env::E, alg::PPO;
             reward_av = mean([validation_episode!(env, alg) for _ in 1:vals_per_checkpoint])
             push!(reward_history, reward_av)
             println("Episode $(i):: Average reward is $(reward_av)")
-            
-            if reward_av > best_reward
-                best_reward = reward_av
-                agent_save_path = save_agent(alg.central_agent, agent_dir; agent_info="iter_$(i)")
-                # Save normalizer state in the same directory
-                serialize(joinpath(agent_save_path, "normalizer.jls"), alg.obs_normalizer)
+            if ephemeral==false
+                if reward_av > best_reward
+                    best_reward = reward_av
+                    agent_save_path = save_agent(alg.central_agent, agent_dir; agent_info="iter_$(i)")
+                    # Save normalizer state in the same directory
+                    serialize(joinpath(agent_save_path, "normalizer.jls"), alg.obs_normalizer)
+                end
             end
         end
     end
@@ -85,7 +89,9 @@ function learn(env::E, alg::PPO;
         end
         xlabel!("Learning Iteration");
         ylabel!("Avg Reward")
-        savefig(joinpath(save_dir, test_name, "learning_curve.png"))
+        if ephemeral==false
+            savefig(joinpath(save_dir, test_name, "learning_curve.png"))
+        end
     end
     return reward_history
 end

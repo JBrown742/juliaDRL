@@ -43,7 +43,7 @@ include("utils.jl")
               batch_size=64, γ=0.99, λ=0.95, ϵ=0.2, c2=0.01)
 
     # 4. Run Learning
-    rewards = learn(env, alg; training_iters=30, test_name="tmp/ILT_Cartpole")
+    rewards = learn(env, alg; training_iters=30, ephemeral=true)
 
     # 5. Verification
     # Cartpole-v1 is solved at 475. 

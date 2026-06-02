@@ -48,9 +48,9 @@ include("utils.jl")
 
     # Run Learning
     # 50 iterations is enough to see the agent stop falling immediately.
-    rewards = learn(env, alg; training_iters=50, test_name="tmp/ILT_BipedalWalker")
+    rewards = learn(env, alg; training_iters=50,  ephemeral=true)
 
-    # ification (Lenient)
+    # verification (Lenient)
     # Random flailing or falling results in ~ -110. 
     # Learning to stand or shuffle forward slightly gets us to > -80.
     # Success here means the implementation is stable enough to allow improvement.

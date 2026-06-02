@@ -51,5 +51,5 @@ include("utils.jl")
     # 5. Verification
     # Pendulum is considered solved if reward > -400. 
     # For a fast ILT we check if it reaches -700.
-    @test verify_ilt(rewards, -800.0, window=3)
+    @test verify_ilt(rewards, -500.0, window=3)
 end
