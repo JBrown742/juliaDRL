@@ -3,6 +3,7 @@ mutable struct Pendulum <: AbstractEnv
     pyenv::PyObject
     state::Vector{Float32}
     terminal::Bool
+    truncated::Bool
     action_type::Type
     action_extent::Tuple{Float32, Float32}
     renderize::Bool
@@ -13,60 +14,26 @@ mutable struct Pendulum <: AbstractEnv
             pe = gym.make("Pendulum-v1");
         end
         obs, info = pe.reset()
-        return new(len, pe, obs, false, Float32, (-2f0, 2f0), render)
+        return new(len, pe, obs, false, false, Float32, (-2f0, 2f0), render)
     end
 end
-
-function clone(s::Pendulum)
-    return Pendulum(
-        s.episode_length;
-        render=s.renderize
-    )
-end
-
-function step!(env::Pendulum, action::Union{Float32, Float64})
-    scaled_action = clamp(2 * action, env.action_extent[1], env.action_extent[2])
+function clone(s::Pendulum) return Pendulum(s.episode_length; render=s.renderize) end
+function step!(env::Pendulum, action::Union{Float32, Float64, Vector{Float32}})
+    u = action isa Vector ? action[1] : action
+    scaled_action = clamp(2.0f0 * u, env.action_extent[1], env.action_extent[2])
     observation, reward, terminated, truncated, info = env.pyenv.step([scaled_action])
-    env.state = normalize(env, observation)
-    env.terminal = terminated
-    return  normalize(env, observation), reward, terminated || truncated 
+    env.state = Float32.(observation)
+    env.terminal = terminated || truncated
+    env.truncated = truncated
+    return env.state, Float32(reward), env.terminal 
 end
-
-function render!(env::Pendulum)
-    env.pyenv.render()
-    return
-end
-
-function close!(env::Pendulum)
-    env.pyenv.close()
-end
-
+function render!(env::Pendulum) env.pyenv.render() end
+function close!(env::Pendulum) env.pyenv.close() end
 function reset!(env::Pendulum) 
     (observation, info) = env.pyenv.reset()
-    env.state = normalize(env, observation)
+    env.state = Float32.(observation)
     env.terminal = false
-    return normalize(env, observation)
+    env.truncated = false
+    return env.state
 end
-
-function renderize!(env::Pendulum)
-    env.pyenv = gym.make("Pendulum-v1", render_mode="human");
-    env.renderize=true
-end
-
-
-# =======================... Utility functions...================================== #
-
-function normalize(env::Pendulum, x::Vector{Float32}) 
-    if length(x) == 3
-        return x ./ Float32.([1.,1.,8.])
-    else
-        return x ./ Float32.([1.,1.,8., 1.])
-    end
-end
-function normalize(env::Pendulum, x::Matrix{Float32}) 
-    if size(x)[1] == 3
-        return x ./ Float32.([1., 1., 8.] .* ones(size(x)))
-    else
-        return x ./ Float32.([1., 1., 8., 1.] .* ones(size(x)))
-    end
-end
+function renderize!(env::Pendulum) env.pyenv = gym.make("Pendulum-v1", render_mode="human"); env.renderize=true end

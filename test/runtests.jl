@@ -1,6 +1,7 @@
 using Test
-using juliaDRL
+using ProximalPolicy
 
-@testset "ppo_test_set" begin
-    @test juliaDRL.Algorithms.RL.PPO.calculate_advantage_coefficients(10, 1f0, 1f0) == fill(1f0, 10)
+@testset "ProximalPolicy Unit Tests" begin
+    include("unit/math_kernels.jl")
+    include("unit/hpc_utils.jl")
 end

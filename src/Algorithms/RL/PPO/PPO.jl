@@ -1,6 +1,46 @@
 # using G as the abtract typeholder for action from the synonym 'gesture' since A is used for agent
 
 """
+    RunningStat
+
+Keeps a running estimate of mean and variance for observation normalization.
+"""
+mutable struct RunningStat
+    mean::Vector{Float32}
+    var::Vector{Float32}
+    count::Float32
+end
+
+function RunningStat()
+    return RunningStat(Float32[], Float32[], 1f-4) # small count to avoid div by zero
+end
+
+function update!(s::RunningStat, x::AbstractVector)
+    if isempty(s.mean)
+        s.mean = copy(x)
+        s.var = ones(Float32, length(x))
+        s.count = 1.0f0
+        return
+    end
+    s.count += 1.0f0
+    old_mean = copy(s.mean)
+    s.mean .+= (x .- s.mean) ./ s.count
+    s.var .+= (x .- old_mean) .* (x .- s.mean)
+end
+
+function normalize(s::RunningStat, x::AbstractVector)
+    if isempty(s.mean) return x end
+    std = sqrt.(s.var ./ s.count) .+ 1f-8
+    return (x .- s.mean) ./ std
+end
+
+function normalize(s::RunningStat, x::AbstractMatrix)
+    if isempty(s.mean) return x end
+    std = sqrt.(s.var ./ s.count) .+ 1f-8
+    return (x .- s.mean) ./ std
+end
+
+"""
     calculate_advantage_coefficients(T::Int, γ::Float32, λ::Float32)
 
 Calculates the coefficients for Generalized Advantage Estimation (GAE).
@@ -26,6 +66,7 @@ mutable struct PPO{G <: AbstractAction} <: AbstractAlgorithm
     c2::Float32 # to weight the entropy objective relative to the clipped objective
     sync_frequency::Int # the number of learning interations to carry out between each synchronisation from central model to workers
     advantage_coefficients::Vector{Float32} # Holds advantage coefficients for the algorithm.
+    obs_normalizer::RunningStat # Running statistics for observation normalization
     # debug variables
     average_policy_loss::Vector{Float32}
     average_value_loss::Vector{Float32}
@@ -45,30 +86,73 @@ mutable struct PPO{G <: AbstractAction} <: AbstractAlgorithm
         
         advantage_coefficients = calculate_advantage_coefficients(T, γ_f32, λ_f32)
         
-        new{G}(N, T, K, agent, wrkrs, batch_size, γ_f32, λ_f32, ϵ_f32, c1_f32, c2_f32, sync_frequency, advantage_coefficients,
+        new{G}(N, T, K, agent, wrkrs, batch_size, γ_f32, λ_f32, ϵ_f32, c1_f32, c2_f32, sync_frequency, advantage_coefficients, RunningStat(),
               Vector{Float32}(), Vector{Float32}(), Vector{Float32}(), Vector{Float32}(), Vector{Float32}(), Vector{Float32}())
     end
 end
 
 
-function train!(alg::PPO{G}, states::Vector{S}, actions::Vector{G}, probabilities::Union{Vector{Vector{Float32}}, Vector{Float32}},
-    advantages::Vector{Float32}, bellman_targets::Vector{Float32}, bellman_errors::Vector{Float32}) where {G <: AbstractAction, S <: AbstractObservation}
+# STABILITY FIX: Global Gradient Norm Clipping
+# Preserves gradient direction while controlling magnitude
+function robust_update!(model_obj, grads; max_norm=0.5f0)
+    has_nan(x::AbstractArray) = any(isnan, x)
+    has_nan(x::Union{NamedTuple, Tuple}) = any(has_nan, x)
+    has_nan(x) = false
+
+    if has_nan(grads)
+        return
+    end
+
+    # Calculate global norm across all parameter arrays
+    gnorm = 0.0f0
+    fmap(grads) do x
+        if x isa AbstractArray
+            gnorm += sum(abs2, x)
+        end
+    end
+    gnorm = sqrt(gnorm)
+
+    # Scale if norm exceeds threshold
+    safe_grads = if gnorm > max_norm
+        scale = max_norm / (gnorm + 1f-6)
+        fmap(x -> x isa AbstractArray ? x .* scale : x, grads)
+    else
+        grads
+    end
     
-    # Normalize the advantages over the current batch
-    mean_advantage_for_batch = mean(advantages)
-    std_advantage_for_batch = std(advantages)
-    normalized_advantages = (advantages .- mean_advantage_for_batch) ./ (std_advantage_for_batch + 1f-6)
+    Flux.update!(model_obj._optimizer_state, model_obj.model, safe_grads)
+end
+
+function train!(alg::PPO{G}, states::Vector, actions::Vector, probabilities::Vector,
+    advantages::Vector, bellman_targets::Vector, bellman_errors::Vector) where {G <: AbstractAction}
     
+    # 1. HPC Optimization: Stack and normalize ONCE per update (not once per epoch)
+    # This reduces allocations from O(K * Batch) to O(1)
+    state_tensor = stack(states)
+    action_tensor = stack(actions)
+    prob_tensor = stack(probabilities)
+    
+    # Normalize advantages for the whole batch
+    mean_adv = mean(advantages)
+    std_adv = std(advantages) + 1f-8
+    norm_advantages = (advantages .- mean_adv) ./ std_adv
+    
+    num_samples = length(states)
+
     for _ in 1:alg.K
-        # initialise vectors to store batched data
-        chunks = Iterators.partition(1:length(states), alg.batch_size)
+        # Shuffle indices for each epoch to improve generalization
+        idxs = Random.shuffle(1:num_samples)
+        chunks = Iterators.partition(idxs, alg.batch_size)
+        
         for batch_indices in chunks
-            batch_states = states[batch_indices]
-            batch_actions = actions[batch_indices]
-            batch_probabilities = probabilities[batch_indices]
-            batch_advantages = normalized_advantages[batch_indices]
-            batch_bellman_targets = bellman_targets[batch_indices]
-            gradient_calculation_and_update!(alg, alg.central_agent, batch_states, batch_actions, batch_advantages, batch_probabilities, batch_bellman_targets)
+            # High-speed slicing (no copies where possible)
+            batch_states = selectdim(state_tensor, ndims(state_tensor), batch_indices)
+            batch_actions = selectdim(action_tensor, ndims(action_tensor), batch_indices)
+            batch_probs = selectdim(prob_tensor, ndims(prob_tensor), batch_indices)
+            batch_advantages = norm_advantages[batch_indices]
+            batch_targets = bellman_targets[batch_indices]
+            
+            gradient_calculation_and_update!(alg, alg.central_agent, batch_states, batch_actions, batch_advantages, batch_probs, batch_targets)
         end
     end
 end
@@ -78,145 +162,180 @@ end
 # ----------------------- whether we are using discrete or continuous actions ------------------------ #
 
 ## OK
-function gradient_calculation_and_update!(alg::PPO{DiscreteAct}, agent::StandardActorCritic, states::Vector{AbstractObservation}, 
-    actions::Vector{DiscreteAct}, batch_advantages::Vector{Float32}, batch_probabilities::Vector{Vector{Float32}}, 
-    batch_bellman_targets::Vector{Float32})
+function gradient_calculation_and_update!(alg::PPO{DiscreteAct}, agent::StandardActorCritic, states::AbstractArray, 
+    actions::AbstractArray, batch_advantages::AbstractArray, batch_probabilities::AbstractArray, 
+    batch_bellman_targets::AbstractArray)
     # The below masking functionality is explicitly for environments where each state may have a different available subset of
     # the total action set
     # Get the action mask matrix for all actions taken in this batch
     actual_action_mask = indicatormat(actions, first(agent.actor_model.model.layers[end].bias |> size))
-    probability_mask = hcat(infer_mask.(batch_probabilities)...) # vector of action masks
+    # HPC Fix: Handle batch_probabilities as a Matrix/tensor if it was stacked
+    if batch_probabilities isa AbstractMatrix
+        probability_mask = hcat(infer_mask.(eachcol(batch_probabilities))...)
+        batch_prob_mat = batch_probabilities
+    elseif batch_probabilities isa AbstractVector && !isempty(batch_probabilities) && batch_probabilities[1] isa AbstractVector
+        probability_mask = hcat(infer_mask.(batch_probabilities)...) # vector of action masks
+        batch_prob_mat = hcat(batch_probabilities...)
+    else
+        # Fallback for unexpected shapes
+        batch_prob_mat = batch_probabilities
+        probability_mask = zeros(Float32, size(batch_prob_mat))
+    end
 
     act_m = agent.actor_model.model
     crit_m = agent.critic_model.model
     # define explicity policy loss function 
     function policy_loss_calculation(m)
         # What does the current model say the probability for all of our actions should be?
-        action_logits = m(reduce(hcat, states)) # get the output logits for each action on each of the states
+        action_logits = m(states) # get the output logits for each action on each of the states
         # We need to use the additive probability mask to calculate these new probs accurately
         action_probs = masked_probabilities(probability_mask, action_logits) # use probability_mask to mask and softmax logits
         # We then use the multiplicative actual action mask to address only the actions actually taken! 
         new_probs = dropdims(sum(action_probs .* actual_action_mask, dims=1), dims=1)
-        old_probs = dropdims(sum(hcat(batch_probabilities...) .* actual_action_mask, dims=1), dims=1)
+        old_probs = dropdims(sum(batch_prob_mat .* actual_action_mask, dims=1), dims=1)
         r = new_probs ./ old_probs
         clamped_r = clamp.(r, 1 - alg.ϵ, 1 + alg.ϵ)
         L_CLIP = mean(min.(r .* batch_advantages, clamped_r .* batch_advantages))
-        entropy = -1 * mean(sum(action_probs .* log.(action_probs), dims=1))
+        entropy = -1 * mean(sum(action_probs .* log.(action_probs .+ 1f-10), dims=1))
         return -1 * L_CLIP - alg.c2 * entropy
     end
     # define value loss function
     function value_loss(m)
-        state_values = dropdims(m(reduce(hcat, states)), dims=1)
+        state_values = dropdims(m(states), dims=1)
         return  Flux.Losses.mse(batch_bellman_targets, state_values)
     end
     # get actor and critic gradients
     ∇_actor = gradient(act_m -> policy_loss_calculation(act_m), act_m) 
-    ∇_critic = gradient(crit_m -> value_loss(crit_m), crit_m)  # Updated to use Flux.trainable
-    # update actor nd critic models 
-    # Gradient clipping can be implemented natively with flux optimizer
-    # The gradient function returns a tuple of gradients one for each input argument, however only 1 (the model) so use [1] index
-    Flux.update!(agent.actor_model._optimizer_state, agent.actor_model.model, ∇_actor[1])
-    Flux.update!(agent.critic_model._optimizer_state, agent.critic_model.model, ∇_critic[1])
+    ∇_critic = gradient(crit_m -> value_loss(crit_m), crit_m)
+    
+    robust_update!(agent.actor_model, ∇_actor[1])
+    robust_update!(agent.critic_model, ∇_critic[1])
 end
 
 # OK
-function gradient_calculation_and_update!(alg::PPO{DiscreteAct}, agent::CombinedActorCritic, states::Vector{AbstractObservation}, 
-    actions::Vector{DiscreteAct}, batch_advantages::Vector{Float32}, batch_probabilities::Vector{Vector{Float32}}, 
-    batch_bellman_targets::Vector{Float32})
+function gradient_calculation_and_update!(alg::PPO{DiscreteAct}, agent::CombinedActorCritic, states::AbstractArray, 
+    actions::AbstractArray, batch_advantages::AbstractArray, batch_probabilities::AbstractArray, 
+    batch_bellman_targets::AbstractArray)
     actual_action_mask = indicatormat(actions, first(agent.combined_model.model.layers[end].paths[1].bias |> size))
-    probability_mask = hcat(infer_mask.(batch_probabilities)...) # vector of action masks
+    # HPC Fix: Handle batch_probabilities as a Matrix/tensor if it was stacked
+    if batch_probabilities isa AbstractMatrix
+        probability_mask = hcat(infer_mask.(eachcol(batch_probabilities))...)
+        batch_prob_mat = batch_probabilities
+    elseif batch_probabilities isa AbstractVector && !isempty(batch_probabilities) && batch_probabilities[1] isa AbstractVector
+        probability_mask = hcat(infer_mask.(batch_probabilities)...) # vector of action masks
+        batch_prob_mat = hcat(batch_probabilities...)
+    else
+        # Fallback for unexpected shapes
+        batch_prob_mat = batch_probabilities
+        probability_mask = zeros(Float32, size(batch_prob_mat))
+    end
 
     combined_m = agent.combined_model.model
     # define explicity policy loss function 
     function loss_calculation(m)
-        action_logits, state_values = m(reduce(hcat, states))
+        action_logits, state_values = m(states)
         action_probs = masked_probabilities(probability_mask, action_logits)
         L_q_learning = Flux.Losses.mse(batch_bellman_targets, dropdims(state_values, dims=1))
         new_probs = dropdims(sum(action_probs .* actual_action_mask, dims=1), dims=1)
-        old_probs = dropdims(sum(hcat(batch_probabilities...) .* actual_action_mask, dims=1), dims=1)
+        old_probs = dropdims(sum(batch_prob_mat .* actual_action_mask, dims=1), dims=1)
         r = new_probs ./ old_probs
         clamped_r = clamp.(r, 1 - alg.ϵ, 1 + alg.ϵ)
         L_CLIP = mean(min.(r .* batch_advantages, clamped_r .* batch_advantages))
-        entropy = -1 * mean(sum(action_probs .* log.(action_probs), dims=1))
+        entropy = -1 * mean(sum(action_probs .* log.(action_probs .+ 1f-10), dims=1))
         return alg.c1 * L_q_learning - L_CLIP - alg.c2 * entropy
     end
     # get combined and critic gradients
     ∇_combined = gradient(combined_m -> loss_calculation(combined_m), combined_m) 
-    # update combined nd critic models 
-    Flux.update!(agent.combined_model._optimizer_state, agent.combined_model.model, ∇_combined[1])
+    
+    robust_update!(agent.combined_model, ∇_combined[1])
 end
 
 # OK
-function gradient_calculation_and_update!(alg::PPO{ContinuousAct}, agent::StandardActorCritic, states::Vector{AbstractObservation}, 
-    actions::Vector{ContinuousAct}, batch_advantages::Vector{Float32}, batch_probabilities::Vector{Float32}, 
-    batch_bellman_targets::Vector{Float32})
+function gradient_calculation_and_update!(alg::PPO{ContinuousAct}, agent::StandardActorCritic, states::AbstractArray, 
+    actions::AbstractArray, batch_advantages::AbstractArray, batch_probabilities::AbstractArray, 
+    batch_bellman_targets::AbstractArray)
     # get_actor and critic models
     act_m = agent.actor_model.model
     crit_m = agent.critic_model.model
     # define explicity policy loss function 
     function policy_loss_calculation(m)
-        μ, log_σ = dropdims.(m(reduce(hcat, states)), dims=1)
-        σ = exp.(log_σ)
-        new_log_probs = log_gauss_pdf(actions, μ, σ)
+        α_raw, β_raw = dropdims.(m(states), dims=1)
+        α = Flux.softplus.(α_raw) .+ 1.0f0
+        β = Flux.softplus.(β_raw) .+ 1.0f0
+        
+        # Convert actions back to [0, 1] samples
+        u = (actions .+ 1.0f0) ./ 2.0f0
+        
+        # HPC Optimization: Use shared beta_logpdf utility
+        new_log_probs = beta_logpdf(α, β, u)
         old_log_probs = batch_probabilities
         r = exp.(new_log_probs .- old_log_probs)
         clamped_r = clamp.(r, 1 - alg.ϵ, 1 + alg.ϵ)
         L_CLIP = mean(min.(r .* batch_advantages, clamped_r .* batch_advantages))     
-        entropy = mean(0.5 .* log.(2 * π .* σ .^ 2 .+ 0.5)) # there is a closed form for the entropy of a gaussian
+        
+        entropy = mean(beta_entropy.(α, β))
         return -1 * L_CLIP - alg.c2 * entropy
     end
     # define value loss function
     function value_loss(m)
-        state_values = dropdims(m(reduce(hcat, states)), dims=1)
+        state_values = dropdims(m(states), dims=1)
         return Flux.Losses.mse(batch_bellman_targets, state_values)
     end
     # get actor and critic gradients
     ∇_actor = gradient(act_m -> policy_loss_calculation(act_m), act_m) 
-    ∇_critic = gradient(crit_m -> value_loss(crit_m), crit_m)  # Updated to use Flux.trainable
-    # update actor nd critic models 
-    Flux.update!(agent.actor_model._optimizer_state, agent.actor_model.model, ∇_actor[1])
-    Flux.update!(agent.critic_model._optimizer_state, agent.critic_model.model, ∇_critic[1])
+    ∇_critic = gradient(crit_m -> value_loss(crit_m), crit_m)
     
+    robust_update!(agent.actor_model, ∇_actor[1])
+    robust_update!(agent.critic_model, ∇_critic[1])
 end
 # OK
-function gradient_calculation_and_update!(alg::PPO{ContinuousAct}, agent::CombinedActorCritic, states::Vector{AbstractObservation}, 
-    actions::Vector{ContinuousAct}, batch_advantages::Vector{Float32}, batch_probabilities::Vector{Float32}, 
-    batch_bellman_targets::Vector{Float32})
+function gradient_calculation_and_update!(alg::PPO{ContinuousAct}, agent::CombinedActorCritic, states::AbstractArray, 
+    actions::AbstractArray, batch_advantages::AbstractArray, batch_probabilities::AbstractArray, 
+    batch_bellman_targets::AbstractArray)
 
     combined_m = agent.combined_model.model
     # define explicity policy loss function 
     function loss_calculation(m)
-        μ, log_σ, state_values = dropdims.(m(reduce(hcat, states)), dims=1)
-        σ = exp.(log_σ)
-        new_log_probs = log_gauss_pdf(actions, μ, σ)
+        α_raw, β_raw, state_values = dropdims.(m(states), dims=1)
+        α = Flux.softplus.(α_raw) .+ 1.0f0
+        β = Flux.softplus.(β_raw) .+ 1.0f0
+        
+        u = (actions .+ 1.0f0) ./ 2.0f0
+        
+        # HPC Optimization: Use shared beta_logpdf utility
+        new_log_probs = beta_logpdf(α, β, u)
         old_log_probs = batch_probabilities
         r = exp.(new_log_probs .- old_log_probs)
         clamped_r = clamp.(r, 1 - alg.ϵ, 1 + alg.ϵ)
         L_CLIP = mean(min.(r .* batch_advantages, clamped_r .* batch_advantages))
         L_value_loss = Flux.Losses.mse(batch_bellman_targets, state_values)
-        entropy = mean(0.5 .* log.(2 * π .* σ .^ 2 .+ 0.5)) # there is a closed form for the entropy of a gaussian
+        entropy = mean(beta_entropy.(α, β))
         return alg.c1 * L_value_loss - L_CLIP - alg.c2 * entropy
     end
     # get combined and critic gradients
     ∇_combined = gradient(combined_m -> loss_calculation(combined_m), combined_m) 
-    # update combined nd critic models 
-    Flux.update!(agent.combined_model._optimizer_state, agent.combined_model.model, ∇_combined[1])
+    
+    robust_update!(agent.combined_model, ∇_combined[1])
 end
 # OK
-function gradient_calculation_and_update!(alg::PPO{MultiContinuousAct}, agent::StandardActorCritic, states::Vector{AbstractObservation}, 
-    actions::Vector{MultiContinuousAct}, batch_advantages::Vector{Float32}, batch_probabilities::Vector{Float32}, 
-    batch_bellman_targets::Vector{Float32})
-    state_dim = ndims(states[1])
-    state_mat = cat(states..., dims=state_dim+1)
+function gradient_calculation_and_update!(alg::PPO{MultiContinuousAct}, agent::StandardActorCritic, states::AbstractArray, 
+    actions::AbstractArray, batch_advantages::AbstractArray, batch_probabilities::AbstractArray, 
+    batch_bellman_targets::AbstractArray)
     # get actor and critic model
     act_m = agent.actor_model.model
     crit_m = agent.critic_model.model
     # define explicity policy loss function 
     function policy_loss_calculation(m)
-        μ, log_σ = m(state_mat)
-        σ = exp.(log_σ)
+        α_raw, β_raw = m(states)
+        α = Flux.softplus.(α_raw) .+ 1.0f0
+        β = Flux.softplus.(β_raw) .+ 1.0f0
 
-        new_log_probs = log_gauss_pdf_multi(actions, μ, σ)
+        # Beta distribution is on [0, 1]. Actions are on [-1, 1].
+        u = (actions .+ 1.0f0) ./ 2.0f0
+
+        # HPC Optimization: Use shared beta_logpdf utility and sum over heads
+        new_log_probs = dropdims(sum(beta_logpdf(α, β, u), dims=1), dims=1)
+
         old_log_probs = batch_probabilities
 
         r = exp.(new_log_probs .- old_log_probs)
@@ -226,35 +345,39 @@ function gradient_calculation_and_update!(alg::PPO{MultiContinuousAct}, agent::S
         L_CLIP = mean(min.(r .* batch_advantages, clamped_r .* batch_advantages))
         
         # Entropy bonus
-        entropy = mean(sum(0.5f0 .* (log.(2f0 * π .* σ .^ 2) .+ 0.5f0), dims=1))
+        entropy = mean(sum(beta_entropy.(α, β), dims=1))
         
         return -L_CLIP - alg.c2 * entropy
     end
     # define value loss function
     function value_loss(m)
-        state_values = dropdims(m(state_mat), dims=1)
+        state_values = dropdims(m(states), dims=1)
         return Flux.Losses.mse(batch_bellman_targets, state_values)
     end
+    
     # get actor and critic gradients
     ∇_actor = gradient(act_m -> policy_loss_calculation(act_m), act_m) 
-    ∇_critic = gradient(crit_m -> value_loss(crit_m), crit_m)  # Updated to use Flux.trainable
-    # update actor nd critic models 
-    Flux.update!(agent.actor_model._optimizer_state, agent.actor_model.model, ∇_actor[1])
-    Flux.update!(agent.critic_model._optimizer_state, agent.critic_model.model, ∇_critic[1])
+    ∇_critic = gradient(crit_m -> value_loss(crit_m), crit_m)
+    
+    robust_update!(agent.actor_model, ∇_actor[1])
+    robust_update!(agent.critic_model, ∇_critic[1])
 end
 
 # OK
-function gradient_calculation_and_update!(alg::PPO{MultiContinuousAct}, agent::CombinedActorCritic, states::Vector{AbstractObservation}, 
-    actions::Vector{MultiContinuousAct}, batch_advantages::Vector{Float32}, batch_probabilities::Vector{Float32}, 
-    batch_bellman_targets::Vector{Float32})
-    state_dim = ndims(states[1])
-    state_mat = cat(states..., dims=state_dim+1)
+function gradient_calculation_and_update!(alg::PPO{MultiContinuousAct}, agent::CombinedActorCritic, states::AbstractArray, 
+    actions::AbstractArray, batch_advantages::AbstractArray, batch_probabilities::AbstractArray, 
+    batch_bellman_targets::AbstractArray)
     combined_m = agent.combined_model.model
     # define explicity policy loss function 
     function loss_calculation(m)
-        μ, log_σ, state_values = m(state_mat)
-        σ = exp.(log_σ)
-        new_log_probs = log_gauss_pdf_multi(actions, μ, σ)
+        α_raw, β_raw, state_values = m(states)
+        α = Flux.softplus.(α_raw) .+ 1.0f0
+        β = Flux.softplus.(β_raw) .+ 1.0f0
+
+        u = (actions .+ 1.0f0) ./ 2.0f0
+
+        # HPC Optimization: Use shared beta_logpdf utility and sum over heads
+        new_log_probs = dropdims(sum(beta_logpdf(α, β, u), dims=1), dims=1)
         old_log_probs = batch_probabilities
         r = exp.(new_log_probs .- old_log_probs)
         clamped_r = clamp.(r, 1 - alg.ϵ, 1 + alg.ϵ)
@@ -265,16 +388,123 @@ function gradient_calculation_and_update!(alg::PPO{MultiContinuousAct}, agent::C
         L_value_loss = Flux.Losses.mse(batch_bellman_targets, dropdims(state_values, dims=1))
         
         # Entropy bonus
-        entropy = mean(sum(0.5f0 .* (log.(2f0 * π .* σ .^ 2) .+ 0.5f0), dims=1)) # Closed-form entropy for Gaussian
+        entropy = mean(sum(beta_entropy.(α, β), dims=1)) 
         return alg.c1 * L_value_loss - L_CLIP  - alg.c2 *entropy
     end
     # get combined and critic gradients
     ∇_combined = gradient(combined_m -> loss_calculation(combined_m), combined_m) 
-    # update combined nd critic models 
-    Flux.update!(agent.combined_model._optimizer_state, agent.combined_model.model, ∇_combined[1])
+    
+    robust_update!(agent.combined_model, ∇_combined[1])
 end
 
-function collect_trajectory_segment!(::Type{E}, agent::A, info::Dict{Symbol, Any}; random_policy::Bool=false) where {E <: AbstractEnv, A <: AbstractAgent}
+# OK
+function gradient_calculation_and_update!(alg::PPO{MultiDiscreteAct}, agent::StandardActorCritic, states::AbstractArray, 
+    actions::AbstractArray, batch_advantages::AbstractArray, batch_probabilities::AbstractArray, 
+    batch_bellman_targets::AbstractArray)
+    
+    act_m = agent.actor_model.model
+    crit_m = agent.critic_model.model
+
+    # MultiDiscrete Configuration (Hardcoded for 2 heads matching Utilities.jl)
+    num_heads = 2
+    head_size = Int(size(act_m.layers[end].bias, 1) / num_heads)
+
+    # Pre-calculate old joint log probabilities and action masks
+    old_probs_reshaped = reshape(batch_probabilities, head_size, num_heads, :)
+    old_joint_log_probs = zeros(Float32, size(states, ndims(states)))
+    action_masks = []
+    for h in 1:num_heads
+        mask = indicatormat(actions[h, :], head_size)
+        push!(action_masks, mask)
+        old_joint_log_probs .+= log.(dropdims(sum(old_probs_reshaped[:, h, :] .* mask, dims=1), dims=1) .+ 1f-10)
+    end
+
+    function policy_loss_calculation(m)
+        logits = m(states) # (head_size * num_heads, batch)
+        
+        # Reshape to (head_size, num_heads, batch) for multi-head processing
+        logits_reshaped = reshape(logits, head_size, num_heads, :)
+        probs = softmax(logits_reshaped; dims=1)
+        
+        # Calculate new joint log-probabilities using pre-calculated masks
+        new_joint_log_probs = reduce(+, [
+            log.(dropdims(sum(probs[:, h, :] .* action_masks[h], dims=1), dims=1) .+ 1f-10)
+            for h in 1:num_heads
+        ])
+
+        r = exp.(new_joint_log_probs .- old_joint_log_probs)
+        clamped_r = clamp.(r, 1 - alg.ϵ, 1 + alg.ϵ)
+        L_CLIP = mean(min.(r .* batch_advantages, clamped_r .* batch_advantages))
+        
+        # Entropy bonus: sum of entropies of all heads
+        entropy = -1 * mean(sum(probs .* log.(probs .+ 1f-10), dims=(1, 2)))
+        
+        return -1 * L_CLIP - alg.c2 * entropy
+    end
+
+    function value_loss(m)
+        state_values = dropdims(m(states), dims=1)
+        return Flux.Losses.mse(batch_bellman_targets, state_values)
+    end
+
+    ∇_actor = gradient(act_m -> policy_loss_calculation(act_m), act_m) 
+    ∇_critic = gradient(crit_m -> value_loss(crit_m), crit_m)
+    
+    robust_update!(agent.actor_model, ∇_actor[1])
+    robust_update!(agent.critic_model, ∇_critic[1])
+end
+
+function gradient_calculation_and_update!(alg::PPO{MultiDiscreteAct}, agent::CombinedActorCritic, states::AbstractArray, 
+    actions::AbstractArray, batch_advantages::AbstractArray, batch_probabilities::AbstractArray, 
+    batch_bellman_targets::AbstractArray)
+    
+    combined_m = agent.combined_model.model
+
+    # MultiDiscrete Configuration (Hardcoded for 2 heads matching Utilities.jl)
+    num_heads = 2
+    head_size = Int(size(combined_m.layers[end].paths[1].bias, 1) / num_heads)
+
+    # Pre-calculate old joint log probabilities and action masks
+    old_probs_reshaped = reshape(batch_probabilities, head_size, num_heads, :)
+    old_joint_log_probs = zeros(Float32, size(states, ndims(states)))
+    action_masks = []
+    for h in 1:num_heads
+        mask = indicatormat(actions[h, :], head_size)
+        push!(action_masks, mask)
+        old_joint_log_probs .+= log.(dropdims(sum(old_probs_reshaped[:, h, :] .* mask, dims=1), dims=1) .+ 1f-10)
+    end
+
+    function loss_calculation(m)
+        logits, state_values = m(states)
+        
+        # Reshape to (head_size, num_heads, batch)
+        logits_reshaped = reshape(logits, head_size, num_heads, :)
+        probs = softmax(logits_reshaped; dims=1)
+        
+        # Calculate new joint log-probabilities using pre-calculated masks
+        new_joint_log_probs = reduce(+, [
+            log.(dropdims(sum(probs[:, h, :] .* action_masks[h], dims=1), dims=1) .+ 1f-10)
+            for h in 1:num_heads
+        ])
+
+        r = exp.(new_joint_log_probs .- old_joint_log_probs)
+        clamped_r = clamp.(r, 1 - alg.ϵ, 1 + alg.ϵ)
+        L_CLIP = mean(min.(r .* batch_advantages, clamped_r .* batch_advantages))
+        
+        L_value_loss = Flux.Losses.mse(batch_bellman_targets, dropdims(state_values, dims=1))
+        
+        # Entropy bonus: sum of entropies of all heads
+        entropy = -1 * mean(sum(probs .* log.(probs .+ 1f-10), dims=(1, 2)))
+        
+        return alg.c1 * L_value_loss - L_CLIP - alg.c2 * entropy
+    end
+
+    ∇_combined = gradient(combined_m -> loss_calculation(combined_m), combined_m) 
+    
+    robust_update!(agent.combined_model, ∇_combined[1])
+end
+
+function collect_trajectory_segment!(env::E, agent::A, info::Dict{Symbol, Any}; random_policy::Bool=false) where {E <: AbstractEnv, A <: AbstractAgent}
     # Using a dictionary here is a hacky means of using distributed processing and passing alg level parameters to each worker_agents
     # without needing to explicity transfer the alg struct which is much more light weight
     T::Int = info[:T] # Trajectory length
@@ -282,91 +512,105 @@ function collect_trajectory_segment!(::Type{E}, agent::A, info::Dict{Symbol, Any
     advantage_coefficients::Vector{Float32} = info[:advantage_coefficients] # Advantage coefficients for GAE
     action_type = info[:action_type] # Action type
     algtype = info[:algtype] # Algorithm type
+    obs_normalizer::RunningStat = info[:obs_normalizer] # For consistent normalization
 
     # initialize vectors to store all the transitions encountered
     local_segment_count = 0 # This keeps an internal count on the worker as to which step we are at
-    trajectory_states = Vector{AbstractObservation}() # the states encountered within the trajectory
-    trajectory_actions = Vector{action_type}() # actions taken in the trajectory
-    all_targets = Vector{Float32}() # the bellman targets of each action -- r_t + γV(s_{t+1})
-    all_errors = Vector{Float32}() # Bellman target - V(s_t)
-    all_advantages = Vector{Float32}() # weighted sum of the bellman errors for the remainder of the trajectory, with later errors downweighted.
-    # This advantage estimate provides a proxy for the "goodness" of the action. An action which has a high reward and and a high estimate for the next state value will haven
-    # a high positive advantage. We strongly associate this to the current action. We also partially credit the current action for the following rewards downweighted by λ.
-    # This bellman error can also be used as a measure of suprise.
-    if action_type <: DiscreteAct
-        # if we have discrete actions the trajectory probability will have to be vectors. We need to retain the probability of every action under the policy used during 
-        # collection for use at training time.
-        trajectory_probabilities = Vector{Vector{Float32}}()
-    else
-        # If we have a continuous action we need only the action itself given that we can infer the probability of any other action if we have the mean and standard deviation
-        trajectory_probabilities = Vector{Float32}()
-    end
-
-    # When starting a new segment collection we need to decide whether to continue with a current episode or start a-new
+    
+    # HPC Optimization: Pre-allocate vectors of known length T
+    trajectory_states = Vector{Any}(undef, T) 
+    trajectory_actions = Vector{action_type}(undef, T)
+    all_targets = Vector{Float32}(undef, T)
+    all_errors = Vector{Float32}(undef, T)
+    all_advantages = Vector{Float32}(undef, T)
+    all_terminals = Vector{Bool}(undef, T) # To reset GAE at boundaries
+    
+    # Initialize with dummy values, will be type-refined on first step
+    trajectory_probabilities = Vector{Any}(undef, T)
 
     while local_segment_count < T # while we still haven't fully collected a segment
-        # initialise inner vectors to collect each subsegment. Important for if T > ep_len
-        current_ep_states = Vector{AbstractObservation}()
-        current_ep_actions = Vector{action_type}()
-        local_targets = Vector{Float32}()
-        local_errors = Vector{Float32}()
-        # The pattern below is used because we have to initialize the environment on each worker, but we cant rely simply on assigning it to the env variable.
-        # We could have multiple different types of env on each worker, but crucially only one of each type. So we initilize a dict and hold each
-        # env keyed by its envtype E. Then when collecting a trajectory explicitly using this via environments[E] which will be a globally defined dict 
-        # on the worker.
-        if environments[E].terminal
-            state = reset!(environments[E])
+        if env.terminal
+            state = reset!(env)
         else
-            state = environments[E].state
+            state = env.state
         end
-        while environments[E].terminal == false && local_segment_count < T # bool flag to denote whether episode has finished
-            # Generalises below...
-            action, state_value, probs = get_action(algtype, agent, environments[E]; random_policy=random_policy) # get the action, the value and the probability
-            push!(trajectory_probabilities, probs)
+        while env.terminal == false && local_segment_count < T 
 
-            new_state, reward, terminal = step!(environments[E], action) # take a step of the hopper environments[E]s
-            push!(current_ep_states, state) # We need the state for V(s_t) during learning
-            push!(current_ep_actions, action) # We obviously need the action for π(a_t | s_t)
+            # Normalize observation before passing to actor
+            norm_state = normalize(obs_normalizer, state)
+            
+            action, state_value, probs = get_action(algtype, agent, norm_state; random_policy=random_policy)
+            
+            new_state, reward, terminal = step!(env, action)
 
-            _, next_state_value, _ = get_action(algtype, agent, environments[E]) # get the value of the next state to calculate bellman error & advantage
-            target = reward .+ (1 .- Int.(terminal)) .* γ .* next_state_value # the target looks good
-            push!(local_targets, target[1])
-            push!(local_errors, target[1] - state_value[1])
-            state = new_state # uodate state
-            local_segment_count += 1 # increment trajectory segment count
-            environments[E].terminal = terminal # update env terminal flag
-            if environments[E].terminal || local_segment_count == T # if terminal
-                len_current_seg = length(current_ep_states) # obtain number of experiences collected in current subsegment
-                advantages = zeros(Float32, len_current_seg) # initial advantages to be zero with length of subsegment
-                for t in 1:len_current_seg
-                    advantages[t] = sum(local_errors[t:end] .* advantage_coefficients[1:(len_current_seg-t+1)])
-                end
-                push!(trajectory_states, current_ep_states...)
-                push!(trajectory_actions, current_ep_actions...)
-                push!(all_advantages, advantages...)
-                push!(all_errors, local_errors...)
-                push!(all_targets, local_targets...)
-                current_ep_states = Vector{AbstractObservation}()
-                current_ep_actions = Vector{action_type}()
-                local_targets = Vector{Float32}()
-                local_errors = Vector{Float32}()
-            end
+            # Normalize new state for next value estimate
+            norm_new_state = normalize(obs_normalizer, new_state)
+            _, next_state_value, _ = get_action(algtype, agent, norm_new_state)
+            
+            # Proper bootstrapping: Only stop bootstrapping if it's a real terminal (not truncation)
+            is_truncated = hasfield(typeof(env), :truncated) ? env.truncated : false
+            is_real_terminal = terminal && !is_truncated
+            
+            target = reward .+ (1 .- Int.(is_real_terminal)) .* γ .* next_state_value
+            
+            # Write directly to pre-allocated indices
+            idx = local_segment_count + 1
+            trajectory_states[idx] = state # store raw state, will be normalized in train!
+            trajectory_actions[idx] = action
+            trajectory_probabilities[idx] = probs
+            all_targets[idx] = target[1]
+            all_errors[idx] = target[1] - state_value[1]
+            all_terminals[idx] = terminal
+            
+            state = new_state
+            local_segment_count += 1
+            env.terminal = terminal
         end
     end
+    
+    # Backward pass for GAE advantage estimation (O(T))
+    # Corrected to respect episode boundaries
+    gae = 0.0f0
+    γλ = γ * info[:λ]
+    for t in T:-1:1
+        if all_terminals[t]
+            gae = 0.0f0
+        end
+        gae = all_errors[t] + γλ * gae
+        all_advantages[t] = gae
+    end
+    
     return trajectory_states, trajectory_actions, trajectory_probabilities, all_advantages, all_targets, all_errors
 end
 
 function get_trajectories!(alg::PPO{G}, env::E; random_policy::Bool=false) where {E <: AbstractEnv, G <: AbstractAction}
     info = Dict{Symbol, Any}(:T => alg.T, 
-            :γ => alg.γ, :advantage_coefficients => alg.advantage_coefficients, 
-            :action_type => G, :algtype => typeof(alg))
+            :γ => alg.γ, :λ => alg.λ, :advantage_coefficients => alg.advantage_coefficients, 
+            :action_type => G, :algtype => typeof(alg), :obs_normalizer => alg.obs_normalizer)
 
     agents = alg.worker_agents # get agents from algorithm
 
-    futures = [@spawnat p collect_trajectory_segment!(typeof(env), agents[i], info, random_policy=random_policy) for (i, p) in enumerate(workers())]
+    # Distributed fix: Create the environment LOCALLY on each worker.
+    # We use a closure that captures the necessary data to rebuild the environment.
+    # This avoids sending the 'env' object (which contains un-picklable PyObjects) over the wire.
+    
+    futures = []
+    for (i, p) in enumerate(workers())
+        # DEFINITIVE FIX: Reconstruct the environment on the worker.
+        # We pass 'env' as a variable, but 'clone(env)' is called LOCALLY on the worker.
+        f = @spawnat p let worker_env = clone(env)
+            collect_trajectory_segment!(worker_env, agents[i], info, random_policy=random_policy)
+        end
+        push!(futures, f)
+    end
+    
     results = fetch.(futures)
-    final_results = vcat(results...)  
-    all_states, all_actions, all_probabilities, all_advantages, all_targets, all_errors = unzip(final_results)
+    all_states = vcat([r[1] for r in results]...)
+    all_actions = vcat([r[2] for r in results]...)
+    all_probabilities = vcat([r[3] for r in results]...)
+    all_advantages = vcat([r[4] for r in results]...)
+    all_targets = vcat([r[5] for r in results]...)
+    all_errors = vcat([r[6] for r in results]...)
     return all_states, all_actions, all_probabilities, all_advantages, all_targets, all_errors
 end
 
@@ -377,8 +621,11 @@ function validation_episode!(alg::PPO{G}, env::E, agent::A; render::Bool=false) 
     episode_reward = Vector{Float64}()
     step=0
     while env.terminal == false # bool flag to denote whether routing has finished
+        # Normalize observation before passing to actor
+        norm_state = normalize(alg.obs_normalizer, state)
+        
         # calculate the mode outputs based on the current graph
-        action, _, _ = get_action(typeof(alg), agent, state; det=true)
+        action, _, _ = get_action(typeof(alg), agent, norm_state; det=true)
         if render==true
             render!(env)
         end

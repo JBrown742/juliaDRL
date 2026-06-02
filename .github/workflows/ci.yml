@@ -1,0 +1,67 @@
+name: CI
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+
+jobs:
+  test:
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - '1.10'
+          - '1.11'
+        os:
+          - ubuntu-latest
+        arch:
+          - x64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+          arch: ${{ matrix.arch }}
+      - uses: julia-actions/cache@v2
+      
+      # Set up Python for PyCall and Gymnasium
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install gymnasium[box2d] swig
+      
+      - name: Build ProximalPolicy
+        run: |
+          julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.build("PyCall"); Pkg.precompile()'
+        env:
+          PYTHON: python
+
+      - name: Run Unit Tests
+        uses: julia-actions/julia-runtest@v1
+        with:
+          project: '.'
+
+      - name: Run Integration Learning Tests (ILTs)
+        run: |
+          julia --project=. -e 'using Pkg; Pkg.instantiate(); include("test/run_ilts.jl")'
+        env:
+          PYTHON: python
+
+      - uses: julia-actions/julia-processcoverage@v1
+      - uses: codecov/codecov-action@v5
+        with:
+          files: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false

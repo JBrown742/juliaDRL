@@ -7,6 +7,7 @@ using Distributions: Normal
 using LinearAlgebra
 using BSON: @save, @load
 using Functors
+using Serialization
 
 export
     # Define abstract types to supertype our observation 
@@ -35,11 +36,7 @@ export
     MultiContinuousAct,
 
     # Model exports
-    LearningModel,
-
-    CNN,
-    DNN,
-    Recurrent, 
+    FluxModel, 
 
     #Policies
     EpsilonGreedy,
@@ -54,9 +51,8 @@ export
     load_model,
     Split
 
+include("./Agents/Types.jl")
+include("./Agents/Models/FluxModel.jl")
 include("./Agents/MasterAgent.jl")
-include("./Agents/Models/DNN.jl")
-include("./Agents/Models/CNN.jl")
-include("./Agents/Models/Recurrent.jl")
 
-end # module Models
+end # module Agents
