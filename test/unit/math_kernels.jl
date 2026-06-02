@@ -26,7 +26,7 @@ using Distributions
         @test res_vec ≈ logpdf.(d, us) atol=1f-5
         
         # Test Beta Entropy
-        # lbeta(α, β) - (α - 1)digamma(α) - (β - 1)digamma(β) + (α + β - 2)digamma(α + β)
+        # logbeta(α, β) - (α - 1)digamma(α) - (β - 1)digamma(β) + (α + β - 2)digamma(α + β)
         expected_ent = entropy(d)
         res_ent = ProximalPolicy.Algorithms.beta_entropy(α, β)
         @test res_ent ≈ expected_ent atol=1f-5

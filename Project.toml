@@ -19,8 +19,15 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 Shuffle = "bf21e494-c40e-4daa-abfb-de5ec0aad010"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
 
 [compat]
 BSON = "0.3.9"
@@ -33,6 +40,7 @@ Plots = "1.40.9"
 PyCall = "1.96.4"
 Shuffle = "0.1.1"
 SpecialFunctions = "2.5.0"
+Statistics = "1.11.1"
 StatsBase = "0.34.4"
 Zygote = "0.6.75"
 julia = "1.10"

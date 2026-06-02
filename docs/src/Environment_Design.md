@@ -1,8 +1,8 @@
-# 🏛️ Environment Design Protocol
+# Environment Design Protocol
 
 Every environment in `ProximalPolicy` must strictly adhere to the `AbstractEnv` contract. This ensures that any model or algorithm can interact with any environment without modification.
 
-## 📋 The AbstractEnv Contract
+## The AbstractEnv Contract
 
 All environments **must** implement the following fields and methods:
 
@@ -47,14 +47,14 @@ function clone(env::MyEnv)
 end
 ```
 
-## 🚀 Best Practices
+## Best Practices
 
 1. **Type Homogeneity:** All tensors must be `Float32`. Convert `PyCall` outputs immediately.
 2. **Zero-Allocation Inner Loops:** Avoid `cat`, `vcat`, or `reshape` inside `step!` if possible.
 3. **Lazy Pre-processing:** The environment should return the "Raw" observation. Use separate wrapper structs for cropping, grayscale, or frame-stacking.
 4. **Independent Randomness:** Ensure that `clone(env)` results in environments with different random seeds if they are used on different workers.
 
-## 🛠️ Implementation Example: Pure Julia
+## Implementation Example: Pure Julia
 
 ```julia
 mutable struct MyEnv <: AbstractEnv

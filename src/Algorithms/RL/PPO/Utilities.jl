@@ -178,7 +178,7 @@ function beta_logpdf(α, β, u)
 end
 
 function beta_entropy(α, β)
-    return lbeta(α, β) - (α - 1f0) * digamma(α) - (β - 1f0) * digamma(β) + (α + β - 2f0) * digamma(α + β)
+    return logbeta(α, β) - (α - 1f0) * digamma(α) - (β - 1f0) * digamma(β) + (α + β - 2f0) * digamma(α + β)
 end
 
 # ------ functions for updating the actor learners by copying the centralized model --------------------- #
