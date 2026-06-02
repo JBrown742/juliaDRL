@@ -1,4 +1,4 @@
-example_scripts/save_data/
+/example_scripts/save_data/
 tmp/
 .vscode/
 .dvc/
@@ -8,3 +8,5 @@ Manifest.toml
 *.jl.cov
 *.jl.mem
 *.jl.mem.*
+*.jls
+*.png
