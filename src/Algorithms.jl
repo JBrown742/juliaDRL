@@ -10,7 +10,6 @@ using Distributed
 using NNlib
 using LinearAlgebra
 using Flux
-using Shuffle
 using Plots # used for API function
 using Random
 using Distributions

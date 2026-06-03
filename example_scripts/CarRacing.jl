@@ -44,10 +44,13 @@ critic_model = CNN(critic_network, critic_optim)
 agent = StandardActorCritic(actor_model, critic_model)
 alg = PPO(MultiContinuousAct, nworkers(), 256, 10, agent; batch_size=32, γ=0.99, λ=0.95, ϵ=0.2, c1=1., c2=0.001, sync_frequency=1)
 
-learn(env, alg; training_iters=500, checkpoint_freq=10, save_dir="/home/johnny/Documents/PersonalCode/ProximalPolicy/example_scripts/save_data/CarRacing/", test_name="PPO_StandardActorCritic_1")
+learn(env, alg; training_iters=500, checkpoint_freq=10, save_dir=joinpath(@__DIR__, "save_data", "CarRacing"), test_name="PPO_StandardActorCritic_1")
 
 # ----------------- Visualisation ------------------ # 
 # To watch the trained agent, uncomment the line below:
-visualise_learning(alg, env, "/home/johnny/Documents/PersonalCode/ProximalPolicy/example_scripts/save_data/CarRacing/PPO_StandardActorCritic_1")
+
+
+visualise_learning(alg, env, joinpath(@__DIR__, "save_data", "CarRacing", "PPO_StandardActorCritic_1"))
+
 
 close!(env)

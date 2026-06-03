@@ -126,7 +126,7 @@ end
 function train!(alg::PPO{G}, states::Vector, actions::Vector, probabilities::Vector,
     advantages::Vector, bellman_targets::Vector, bellman_errors::Vector) where {G <: AbstractAction}
     
-    # 1. HPC Optimization: Stack and normalize ONCE per update (not once per epoch)
+    # 1. Performance Optimization: Stack and normalize ONCE per update (not once per epoch)
     # This reduces allocations from O(K * Batch) to O(1)
     state_tensor = stack(states)
     action_tensor = stack(actions)
@@ -169,7 +169,7 @@ function gradient_calculation_and_update!(alg::PPO{DiscreteAct}, agent::Standard
     # the total action set
     # Get the action mask matrix for all actions taken in this batch
     actual_action_mask = indicatormat(actions, first(agent.actor_model.model.layers[end].bias |> size))
-    # HPC Fix: Handle batch_probabilities as a Matrix/tensor if it was stacked
+    # Performance Fix: Handle batch_probabilities as a Matrix/tensor if it was stacked
     if batch_probabilities isa AbstractMatrix
         probability_mask = hcat(infer_mask.(eachcol(batch_probabilities))...)
         batch_prob_mat = batch_probabilities
@@ -217,7 +217,7 @@ function gradient_calculation_and_update!(alg::PPO{DiscreteAct}, agent::Combined
     actions::AbstractArray, batch_advantages::AbstractArray, batch_probabilities::AbstractArray, 
     batch_bellman_targets::AbstractArray)
     actual_action_mask = indicatormat(actions, first(agent.combined_model.model.layers[end].paths[1].bias |> size))
-    # HPC Fix: Handle batch_probabilities as a Matrix/tensor if it was stacked
+    # Performance Fix: Handle batch_probabilities as a Matrix/tensor if it was stacked
     if batch_probabilities isa AbstractMatrix
         probability_mask = hcat(infer_mask.(eachcol(batch_probabilities))...)
         batch_prob_mat = batch_probabilities
@@ -266,7 +266,7 @@ function gradient_calculation_and_update!(alg::PPO{ContinuousAct}, agent::Standa
         # Convert actions back to [0, 1] samples
         u = (actions .+ 1.0f0) ./ 2.0f0
         
-        # HPC Optimization: Use shared beta_logpdf utility
+        # Performance Optimization: Use shared beta_logpdf utility
         new_log_probs = beta_logpdf(α, β, u)
         old_log_probs = batch_probabilities
         r = exp.(new_log_probs .- old_log_probs)
@@ -302,7 +302,7 @@ function gradient_calculation_and_update!(alg::PPO{ContinuousAct}, agent::Combin
         
         u = (actions .+ 1.0f0) ./ 2.0f0
         
-        # HPC Optimization: Use shared beta_logpdf utility
+        # Performance Optimization: Use shared beta_logpdf utility
         new_log_probs = beta_logpdf(α, β, u)
         old_log_probs = batch_probabilities
         r = exp.(new_log_probs .- old_log_probs)
@@ -333,7 +333,7 @@ function gradient_calculation_and_update!(alg::PPO{MultiContinuousAct}, agent::S
         # Beta distribution is on [0, 1]. Actions are on [-1, 1].
         u = (actions .+ 1.0f0) ./ 2.0f0
 
-        # HPC Optimization: Use shared beta_logpdf utility and sum over heads
+        # Performance Optimization: Use shared beta_logpdf utility and sum over heads
         new_log_probs = dropdims(sum(beta_logpdf(α, β, u), dims=1), dims=1)
 
         old_log_probs = batch_probabilities
@@ -376,7 +376,7 @@ function gradient_calculation_and_update!(alg::PPO{MultiContinuousAct}, agent::C
 
         u = (actions .+ 1.0f0) ./ 2.0f0
 
-        # HPC Optimization: Use shared beta_logpdf utility and sum over heads
+        # Performance Optimization: Use shared beta_logpdf utility and sum over heads
         new_log_probs = dropdims(sum(beta_logpdf(α, β, u), dims=1), dims=1)
         old_log_probs = batch_probabilities
         r = exp.(new_log_probs .- old_log_probs)
@@ -517,7 +517,7 @@ function collect_trajectory_segment!(env::E, agent::A, info::Dict{Symbol, Any}; 
     # initialize vectors to store all the transitions encountered
     local_segment_count = 0 # This keeps an internal count on the worker as to which step we are at
     
-    # HPC Optimization: Pre-allocate vectors of known length T
+    # Performance Optimization: Pre-allocate vectors of known length T
     trajectory_states = Vector{Any}(undef, T) 
     trajectory_actions = Vector{action_type}(undef, T)
     all_targets = Vector{Float32}(undef, T)

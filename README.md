@@ -1,4 +1,4 @@
-# ProximalPolicy: High-Performance Deep Reinforcement Learning in Julia
+# ProximalPolicy: Performance-Optimized Deep Reinforcement Learning in Julia
 
 [![Julia Version](https://img.shields.io/badge/julia-1.10+-9558B2.svg)](https://julialang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -6,17 +6,17 @@
 
 A high-performance, modular library for Deep Reinforcement Learning (DRL) implemented in Julia. This package is designed for **Research Engineers** who need to bridge the gap between advanced mathematical literature and scalable, compute-efficient infrastructure.
 
-## 🚀 Key Features
+## Key Features
 
 - **Architectural Separation:** Complete decoupling of RL algorithms from neural network models. Seamlessly swap any Flux.jl-compatible model into the learner.
 - **Multi-Dispatch Core:** Specialized implementations for Discrete, Continuous, and Multi-Continuous action spaces using Julia's powerful multiple dispatch.
-- **HPC Optimized:** 
+- **Performance Optimized:** 
     - **O(T) GAE Backward Pass:** Linear-time Generalized Advantage Estimation for high-throughput experience collection.
     - **Zero-Copy Batching:** Optimized training loops that minimize heap allocations and garbage collection pressure.
     - **Distributed Support:** Native integration with Julia's `Distributed.jl` for parallel trajectory collection across multiple workers.
 - **Reproduction Ready:** Clear scripts and DVC integration for tracking experiments and results.
 
-## 📚 Annotated Mathematical Implementation
+## Annotated Mathematical Implementation
 
 ### Proximal Policy Optimization (PPO)
 This library implements the PPO-Clip algorithm as described in [Schulman et al. (2017)](https://arxiv.org/abs/1707.06347). The core surrogate objective is implemented with numerical stability in mind:
@@ -39,7 +39,7 @@ $$a_t = 2u_t - 1$$
 To ensure numerical stability and a unimodal distribution, our implementation enforces $\alpha, \beta > 1$ via a softplus transformation of the network outputs:
 $$\alpha, \beta = \text{softplus}(z) + 1.0$$
 
-## 🛠️ Usage Example (Cartpole)
+## Usage Example (Cartpole)
 
 The library provides a clean API for training agents. For details on how to add your own custom environments, see our [Environment Design Protocol](docs/Environment_Design.md).
 
@@ -66,14 +66,14 @@ alg = PPO(DiscreteAct, nworkers(), 2048, 10, agent)
 learn(env, alg; training_iters=100)
 ```
 
-## 📈 Performance Benchmarks
+## Performance Benchmarks
 
-A HPC-optimized implementation of PPO. Some key drivers of performance include:
+A Performance-optimized implementation of PPO. Some key drivers of performance include:
 1. Eliminating splatting overhead in batch preparation.
 2. Hoisting matrix concatenations out of the gradient inner loop.
 3. Leveraging linear-time advantage estimation.
 
-## 🧪 Verification & Integration Learning Tests (ILTs)
+## Verification & Integration Learning Tests (ILTs)
 
 The package implements both unit tests (which verify code correctness) and **Integration Learning Tests (ILTs)**, which verify that the agent actually *learns*. This library includes a suite of ILTs to ensure algorithmic convergence across all supported action spaces.
 
@@ -90,8 +90,8 @@ To verify the entire library, run the provided scripts:
 julia --project test_scripts/Cartpole/PPO.jl
 ```
 
-## 🛠️ Unit Testing
-We are incrementally adding unit tests to verify the core mathematical kernels and HPC utilities. These tests ensure that optimizations (like the $O(T)$ GAE pass) remain mathematically sound.
+## Unit Testing
+We are incrementally adding unit tests to verify the core mathematical kernels and Performance utilities. These tests ensure that optimizations (like the $O(T)$ GAE pass) remain mathematically sound.
 
 To run unit tests:
 ```bash
@@ -102,3 +102,5 @@ The intention here is to use both the unit tests and ILTs to confirm the current
 
 ---
 *Developed by Jonathon Brown -jonathonbrown742@gmail.com*
+
+*
