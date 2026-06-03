@@ -5,7 +5,6 @@ using Flux
 using Flux: params, Statistics
 using Distributions: Normal
 using LinearAlgebra
-using BSON: @save, @load
 using Functors
 using Serialization
 

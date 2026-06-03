@@ -33,9 +33,11 @@ alg = PPO(ContinuousAct, nworkers(), 2048, 10, agent;
 
 # ILT: Run for 50 iterations to verify reward signal improvement
 learn(env, alg; training_iters=50, 
-      save_dir="/home/johnny/Documents/PersonalCode/ProximalPolicy/test_data/Pendulum", 
+      save_dir=joinpath(@__DIR__, "..", "test_data", "Pendulum"), 
       test_name="ILT_Pendulum")
 
 # ----------------- Visualisation ------------------ # 
 # To watch the trained agent, uncomment the line below:
-# visualise_learning(alg, env, "/home/johnny/Documents/PersonalCode/ProximalPolicy/test_data/Pendulum/ILT_Pendulum")
+
+# visualise_learning(alg, env, joinpath(@__DIR__, "..", "test_data", "Pendulum", "ILT_Pendulum"))
+
