@@ -4,16 +4,18 @@ if nworkers() == 1
 end
 
 @everywhere using ProximalPolicy
+include("utils.jl")
+@everywhere include("utils.jl")
+@everywhere set_seed(42 + myid())
+
 using Flux
 using LinearAlgebra
 using Test
 
-include("utils.jl")
-
 @testset "ILT: ParticleChase (Multi-Discrete)" begin
-    # 1. Setup & Seeding
-    set_seed(42)
-    env = ParticleChase(200, 2; max_speed=2.0f0)
+    # 1. Setup
+    # The main env seed
+    env = ParticleChase(200, 2; max_speed=2.0f0, seed=42)
 
     # 2. Architectures with Orthogonal Init
     function orthogonal_init(out, in; gain=1.0)

@@ -4,16 +4,18 @@ if nworkers() == 1
 end
 
 @everywhere using ProximalPolicy
+include("utils.jl")
+@everywhere include("utils.jl")
+@everywhere set_seed(42 + myid())
+
 using Flux
 using LinearAlgebra
 using Test
 
-include("utils.jl")
-
 @testset "ILT: Pendulum-v1 (Continuous)" begin
-    # 1. Setup & Seeding
-    set_seed(42)
-    env = Pendulum(200)
+    # 1. Setup
+    # The main env seed
+    env = Pendulum(200; seed=42)
 
     # 2. Architectures with Orthogonal Init
     function orthogonal_init(out, in; gain=1.0)

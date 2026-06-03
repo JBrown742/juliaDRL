@@ -4,16 +4,18 @@ if nworkers() == 1
 end
 
 @everywhere using ProximalPolicy
+include("utils.jl")
+@everywhere include("utils.jl")
+@everywhere set_seed(42 + myid())
+
 using Flux
 using LinearAlgebra
 using Test
 
-include("utils.jl")
-
 @testset "ILT: BipedalWalker-v3 (Multi-Continuous)" begin
-    # Setup & Seeding
-    set_seed(42)
-    env = BipedalWalker(2000)
+    # 1. Setup
+    # The main env seed
+    env = BipedalWalker(2000; seed=42)
 
     # Architectures with Orthogonal Init
     function orthogonal_init(out, in; gain=1.0)

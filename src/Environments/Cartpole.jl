@@ -7,21 +7,23 @@ mutable struct Cartpole <: AbstractEnv
     actions::Vector{Int}
     action_mask::Vector{Float32}
     renderize::Bool
-    function Cartpole(len::Int64; render=false)
+    seed::Union{Int, Nothing}
+    function Cartpole(len::Int64; render=false, seed=nothing)
         if render
             pe = gym.make("CartPole-v1", render_mode="human");
         else            
             pe = gym.make("CartPole-v1");
         end
-        obs, info = pe.reset()
-        return new(len, pe, Float32.(obs), false, false, [0, 1], ones(Float32, 2), render)
+        obs, info = pe.reset(seed=seed)
+        return new(len, pe, Float32.(obs), false, false, [0, 1], ones(Float32, 2), render, seed)
     end
 end
 
 function clone(s::Cartpole)
     return Cartpole(
         s.episode_length;
-        render=s.renderize
+        render=s.renderize,
+        seed=s.seed
     )
 end
 
@@ -41,8 +43,8 @@ function render!(env::Cartpole)
     return
 end
 
-function reset!(env::Cartpole) 
-    observation, info = env.pyenv.reset()
+function reset!(env::Cartpole; seed=nothing) 
+    observation, info = env.pyenv.reset(seed=seed)
     env.state = normalize(observation)
     env.terminal = false
     env.truncated = false

@@ -9,11 +9,15 @@ mutable struct ParticleChase <: AbstractEnv
     max_speed::Float32
     hard::Bool
     renderize::Bool
-    function ParticleChase(len::Int, dims::Int; render::Bool=false, max_speed::Float32=1f0, hard::Bool=false)
+    seed::Union{Int, Nothing}
+    function ParticleChase(len::Int, dims::Int; render::Bool=false, max_speed::Float32=1f0, hard::Bool=false, seed=nothing)
+        if !isnothing(seed)
+            Random.seed!(seed)
+        end
         current_position = rand(Float32, dims) .* 100
         target_position = rand(Float32, dims) .* 100
         state = target_position .- current_position
-        return new(len, 0, dims, current_position, target_position, state, false, max_speed, hard, render)
+        return new(len, 0, dims, current_position, target_position, state, false, max_speed, hard, render, seed)
     end
 end
 
@@ -22,7 +26,8 @@ function clone(s::ParticleChase)
         s.episode_length, s.dims;
         render=s.renderize,
         max_speed=s.max_speed,
-        hard=s.hard
+        hard=s.hard,
+        seed=s.seed
     )
 end
 
@@ -69,7 +74,11 @@ function render!(env::ParticleChase)
     return
 end
 
-function reset!(env::ParticleChase) 
+function reset!(env::ParticleChase; seed=nothing) 
+    if !isnothing(seed)
+        Random.seed!(seed)
+        env.seed = seed
+    end
     env.current_position = rand(Float32, env.dims) .* 100
     env.target_position = rand(Float32, env.dims) .* 100
     env.state = env.target_position .- env.current_position

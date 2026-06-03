@@ -12,18 +12,19 @@ mutable struct BipedalWalker <: AbstractEnv
     hardcore::Bool
     stuck_counter::Int
     stuck_threshold::Int
-    function BipedalWalker(len::Int; render::Bool=false, hardcore=false, stuck_threshold=200)
+    seed::Union{Int, Nothing}
+    function BipedalWalker(len::Int; render::Bool=false, hardcore=false, stuck_threshold=200, seed=nothing)
         if render
             pe = gym.make("BipedalWalker-v3", render_mode="human", hardcore=hardcore);
         else            
             pe = gym.make("BipedalWalker-v3", hardcore=hardcore);
         end
-        state, info = pe.reset()
+        state, info = pe.reset(seed=seed)
         highs = Float32.(pe.unwrapped.observation_space.high)
         lows = Float32.(pe.unwrapped.observation_space.low)
         n_actions = pe.unwrapped.action_space.shape[1]
         obs = 2 .* ((state .- lows) ./ (highs .- lows)) .- 1
-        return new(len, 0, pe, Float32.(obs), false, false, fill(Float32, n_actions), lows, highs, render, hardcore, 0, stuck_threshold)
+        return new(len, 0, pe, Float32.(obs), false, false, fill(Float32, n_actions), lows, highs, render, hardcore, 0, stuck_threshold, seed)
     end
 end
 
@@ -32,7 +33,8 @@ function clone(s::BipedalWalker)
             s.episode_length;
             render=s.renderize,
             hardcore=s.hardcore,
-            stuck_threshold=s.stuck_threshold
+            stuck_threshold=s.stuck_threshold,
+            seed=s.seed
         )
 end
 
@@ -72,8 +74,8 @@ function render!(env::BipedalWalker)
     return
 end
 
-function reset!(env::BipedalWalker) 
-    (s, info) = env.pyenv.reset()
+function reset!(env::BipedalWalker; seed=nothing) 
+    (s, info) = env.pyenv.reset(seed=seed)
     observation = process_state(env, s)
     env.state = observation
     env.stuck_counter = 0

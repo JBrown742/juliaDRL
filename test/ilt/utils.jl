@@ -1,7 +1,9 @@
+using Distributed
 using Random
 using ProximalPolicy
 using Test
 using Statistics
+using PyCall
 
 """
     set_seed(seed::Int)
@@ -10,9 +12,15 @@ Sets seeds for Julia, Random, and any other relevant libraries (like Python via 
 to ensure reproducibility in ILTs.
 """
 function set_seed(seed::Int)
+    # 1. Julia Seed
     Random.seed!(seed)
-    # If using PyCall/Gym, we might need to set seeds there too, 
-    # but that's usually done on env.reset(seed=seed).
+
+    # 2. Python Global Seeds
+    pyimport("random").seed(seed)
+    pyimport("numpy.random").seed(seed)
+
+    # Note: gymnasium environment seeds are handled in reset! or constructors
+    # println("Seeding PID $(getpid()) (myid $(Distributed.myid())) with seed $seed")
 end
 
 """
