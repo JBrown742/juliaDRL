@@ -2,7 +2,7 @@
 
 [![Julia Version](https://img.shields.io/badge/julia-1.10+-9558B2.svg)](https://julialang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Coverage](https://codecov.io/gh/jonathonbrown/ProximalPolicy.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/jonathonbrown/ProximalPolicy.jl)
+[![Coverage](https://codecov.io/gh/JBrown742/ProximalPolicy.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/JBrown742/ProximalPolicy.jl)
 
 A high-performance, modular library for Deep Reinforcement Learning (DRL) implemented in Julia. This package is designed for **Research Engineers** who need to bridge the gap between advanced mathematical literature and scalable, compute-efficient infrastructure.
 

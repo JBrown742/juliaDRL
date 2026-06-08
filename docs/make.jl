@@ -17,6 +17,6 @@ makedocs(
 )
 
 deploydocs(
-    repo = "github.com/jonathonbrown/ProximalPolicy.jl.git",
+    repo = "github.com/JBrown742/ProximalPolicy.jl.git",
     push_preview = true,
 )
