@@ -55,7 +55,7 @@ jobs:
 
       - name: Run Integration Learning Tests (ILTs)
         run: |
-          julia --project=. -e 'using Pkg; Pkg.instantiate(); include("test/run_ilts.jl")'
+          julia --project=. --code-coverage=user -e 'using Pkg; Pkg.instantiate(); include("test/run_ilts.jl")'
         env:
           PYTHON: python
 
