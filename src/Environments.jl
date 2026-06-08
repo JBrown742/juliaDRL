@@ -4,16 +4,21 @@ using Plots
 using Combinatorics
 using Distributed
 using Distributions
-using PyCall 
+using PythonCall 
+import PythonCall: pynew, pycopy!
 using LinearAlgebra
 using StatsBase
 using Random
 using Flux
 using NNlib
 
-const gym = PyNULL()
+const gym = pynew()
 function __init__()
-    copy!(gym,  pyimport("gymnasium"))
+    try
+        pycopy!(gym, pyimport("gymnasium"))
+    catch e
+        @warn "Could not import 'gymnasium'. Some environments will not be available. Error: $e"
+    end
 end
 
 using ..ProximalPolicy: AbstractObservation, AbstractAction

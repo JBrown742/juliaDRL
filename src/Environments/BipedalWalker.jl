@@ -1,7 +1,7 @@
 mutable struct BipedalWalker <: AbstractEnv
     episode_length::Int64
     episode_step::Int64
-    pyenv::PyObject
+    pyenv::Py
     state::Vector{Float32}
     terminal::Bool
     truncated::Bool
@@ -19,12 +19,13 @@ mutable struct BipedalWalker <: AbstractEnv
         else            
             pe = gym.make("BipedalWalker-v3", hardcore=hardcore);
         end
-        state, info = pe.reset(seed=seed)
-        highs = Float32.(pe.unwrapped.observation_space.high)
-        lows = Float32.(pe.unwrapped.observation_space.low)
-        n_actions = pe.unwrapped.action_space.shape[1]
+        res = pe.reset(seed=seed)
+        state = pyconvert(Vector{Float32}, res[0])
+        highs = pyconvert(Vector{Float32}, pe.unwrapped.observation_space.high)
+        lows = pyconvert(Vector{Float32}, pe.unwrapped.observation_space.low)
+        n_actions = pyconvert(Int, pe.unwrapped.action_space.shape[0])
         obs = 2 .* ((state .- lows) ./ (highs .- lows)) .- 1
-        return new(len, 0, pe, Float32.(obs), false, false, fill(Float32, n_actions), lows, highs, render, hardcore, 0, stuck_threshold, seed)
+        return new(len, 0, pe, obs, false, false, fill(Float32, n_actions), lows, highs, render, hardcore, 0, stuck_threshold, seed)
     end
 end
 
@@ -39,7 +40,7 @@ function clone(s::BipedalWalker)
 end
 
 function step!(env::BipedalWalker, action::AbstractVector{<:AbstractFloat})
-    # Ensure Float32 for PyCall and internal consistency
+    # Ensure Float32 for internal consistency
     action_f32 = Float32.(action)
     
     # If the policy has collapsed and produced NaNs, we intercept them here
@@ -52,7 +53,11 @@ function step!(env::BipedalWalker, action::AbstractVector{<:AbstractFloat})
     # This ensures that even if the policy produces an extreme value, 
     # the simulation (Box2D) receives a valid physical torque.
     safe_action = clamp.(action_f32, -1.0f0, 1.0f0)
-    s, reward, terminated, truncated, info = env.pyenv.step(safe_action)
+    res = env.pyenv.step(safe_action)
+    s = pyconvert(Vector{Float32}, res[0])
+    reward = pyconvert(Float32, res[1])
+    terminated = pyconvert(Bool, res[2])
+    truncated = pyconvert(Bool, res[3])
     
     observation = process_state(env, s)
 
@@ -66,7 +71,7 @@ function step!(env::BipedalWalker, action::AbstractVector{<:AbstractFloat})
         env.truncated = true
     end
     
-    return Float32.(observation), Float32.(reward), env.terminal
+    return observation, reward, env.terminal
 end
 
 function render!(env::BipedalWalker)
@@ -75,14 +80,15 @@ function render!(env::BipedalWalker)
 end
 
 function reset!(env::BipedalWalker; seed=nothing) 
-    (s, info) = env.pyenv.reset(seed=seed)
+    res = env.pyenv.reset(seed=seed)
+    s = pyconvert(Vector{Float32}, res[0])
     observation = process_state(env, s)
     env.state = observation
     env.stuck_counter = 0
     env.terminal = false
     env.truncated = false
     env.episode_step = 0
-    return Float32.(env.state)
+    return env.state
 end
 
 function close!(env::BipedalWalker)
