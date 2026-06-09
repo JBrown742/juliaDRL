@@ -1,3 +1,7 @@
+using ProximalPolicy
+# Initialize CondaPkg/PythonCall on the main worker first to avoid lock contention
+ProximalPolicy.Environments.BipedalWalker(1) 
+
 using Distributed
 if nworkers() == 1
     addprocs(3)

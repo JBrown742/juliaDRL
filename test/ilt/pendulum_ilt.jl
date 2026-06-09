@@ -1,3 +1,8 @@
+using ProximalPolicy
+# Initialize CondaPkg/PythonCall on the main worker first to avoid lock contention
+# by ensuring the environment is resolved before workers try to access it.
+ProximalPolicy.Environments.Pendulum(1) 
+
 using Distributed
 if nworkers() == 1
     addprocs(3)

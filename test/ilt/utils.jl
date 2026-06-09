@@ -3,12 +3,12 @@ using Random
 using ProximalPolicy
 using Test
 using Statistics
-using PyCall
+using PythonCall
 
 """
     set_seed(seed::Int)
 
-Sets seeds for Julia, Random, and any other relevant libraries (like Python via PyCall) 
+Sets seeds for Julia, Random, and any other relevant libraries (like Python via PythonCall) 
 to ensure reproducibility in ILTs.
 """
 function set_seed(seed::Int)

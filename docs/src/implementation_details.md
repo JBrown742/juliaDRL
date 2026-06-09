@@ -52,7 +52,7 @@ THIS IS STILL EXPERIMENTAL.
 
 The `get_trajectories!` function utilizes Julia's `@spawnat` and `fetch` to gather experience from workers in parallel. 
 
-- **Environment Cloning:** Each worker reconstructs its own local version of the environment to avoid serialization issues with un-picklable objects (like Python's `gym` environments accessed via `PyCall`).
+- **Environment Cloning:** Each worker reconstructs its own local version of the environment to avoid serialization issues with un-picklable objects (like Python's `gym` environments accessed via `PythonCall`).
 
 ## 6. Training API (`learn`)
 
