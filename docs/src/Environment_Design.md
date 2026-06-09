@@ -49,7 +49,7 @@ end
 
 ## Best Practices
 
-1. **Type Homogeneity:** All tensors must be `Float32`. Convert `PyCall` outputs immediately.
+1. **Type Homogeneity:** All tensors must be `Float32`. Convert `PythonCall` outputs immediately.
 2. **Zero-Allocation Inner Loops:** Avoid `cat`, `vcat`, or `reshape` inside `step!` if possible.
 3. **Lazy Pre-processing:** The environment should return the "Raw" observation. Use separate wrapper structs for cropping, grayscale, or frame-stacking.
 4. **Independent Randomness:** Ensure that `clone(env)` results in environments with different random seeds if they are used on different workers.
